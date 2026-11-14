@@ -1,19 +1,8 @@
 import 'package:tp_web/tp_web.dart';
-import 'package:web/web.dart';
+import 'package:web/web.dart' as web;
 
-/// Entry point of the browser client. Milestone M0: a placeholder page that
-/// proves the dart2js build and the asset pipeline work end to end.
+/// Entry point of the browser client.
 void main() {
-  document.title = 'Terminal Prompter';
-  final app = document.getElementById('app') ?? document.body!;
-
-  final heading = document.createElement('h1')
-    ..textContent = 'Terminal Prompter';
-  final note = document.createElement('p')
-    ..textContent =
-        '${clientIdentifier()} - the terminal arrives in milestone M2.';
-
-  app
-    ..appendChild(heading)
-    ..appendChild(note);
+  final root = web.document.getElementById('app') as web.HTMLElement?;
+  App(root ?? web.document.body!).run();
 }

@@ -12,22 +12,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-
-const Map<String, String> _contentTypes = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.json': 'application/json',
-  '.map': 'application/json',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2',
-  '.woff': 'font/woff',
-  '.txt': 'text/plain; charset=utf-8',
-  '.wasm': 'application/wasm',
-};
+import 'package:tp_agent/src/assets/content_types.dart';
 
 /// Base64 characters per generated source line.
 const int _lineWidth = 76;
@@ -71,9 +56,7 @@ Future<void> main(List<String> args) async {
 }
 
 /// Returns the `Content-Type` for [path] based on its extension.
-String contentTypeFor(String path) =>
-    _contentTypes[p.extension(path).toLowerCase()] ??
-    'application/octet-stream';
+String contentTypeFor(String path) => contentTypeForPath(path);
 
 /// Produces the Dart source of the asset bundle for [files] (path to raw
 /// bytes). Output is deterministic: assets are sorted by path.

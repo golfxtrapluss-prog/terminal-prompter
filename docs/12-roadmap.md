@@ -19,6 +19,7 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 - Agent: `HttpServer`, `/api/ws`, `SessionManager`, attach/input/resize/signal/output/ack.
 - Klient: xterm.js-interop, Raw-modus, én sesjon. Ingen auth ennå (kun 127.0.0.1).
 - **Akseptanse:** `make run`, åpne `http://127.0.0.1:7681`, kjør `htop` og `vim` normalt.
+- **Status:** ✅ ferdig 14.11.2026. Verifisert i nettleser med `top` og `vi` (htop/vim ikke installert på utviklingsmaskinen), resize via `stty size`, gjenopptak etter sideoppfriskning. Integrasjonstest `packages/tp_agent/test/server_integration_test.dart`.
 
 ## M3 – Robusthet (2–3 dager)
 - Gjenopptak med `last_seq`, truncation, `client_msg_id`-idempotens, `ack_in`, flytkontroll, heartbeat.

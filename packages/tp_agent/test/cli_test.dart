@@ -24,10 +24,10 @@ void main() {
     expect(err.toString(), isEmpty);
   });
 
-  test('run is a stub until M2 and exits non-zero', () async {
-    final code = await runner.run(['run', '--config', '/tmp/x.toml']);
-    expect(code, 2);
-    expect(err.toString(), contains('/tmp/x.toml'));
+  test('run with a missing config file fails with EX_CONFIG', () async {
+    final code = await runner.run(['run', '--config', '/nonexistent/x.toml']);
+    expect(code, 78);
+    expect(err.toString(), contains('/nonexistent/x.toml'));
   });
 
   test('unknown command raises a usage error', () {

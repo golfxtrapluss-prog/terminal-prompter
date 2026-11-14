@@ -44,7 +44,7 @@ build: embed
 >     --target-os linux --target-arch arm64 -o ../../bin/tp-agent-linux-arm64 bin/tp_agent.dart
 > ls -la bin/
 
-run: gen-assets
+run: web gen-assets
 > cd $(AGENT) && $(DART) run bin/tp_agent.dart run --config ../../dev/config.toml --dev-web-dir web_build
 
 test: analyze

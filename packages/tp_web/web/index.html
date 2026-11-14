@@ -2,12 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="dark">
   <title>Terminal Prompter</title>
+  <link rel="stylesheet" href="vendor/xterm/xterm.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app"></div>
-  <script src="main.dart.js" defer></script>
+  <script src="vendor/xterm/xterm.js"></script>
+  <script src="vendor/xterm/addon-fit.js"></script>
+  <script src="vendor/xterm/addon-web-links.js"></script>
+  <script src="vendor/xterm/addon-search.js"></script>
+  <script src="vendor/xterm/addon-unicode11.js"></script>
+  <script src="main.dart.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
 import 'package:tp_protocol/tp_protocol.dart';
-import 'package:tp_web/tp_web.dart';
+import 'package:tp_web/src/client_info.dart';
 
 void main() {
   test('client identifier carries version and protocol version', () {

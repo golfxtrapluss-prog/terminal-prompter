@@ -5,6 +5,12 @@ abstract final class Limits {
   /// Maximum size of a JSON control message in either direction.
   static const int maxControlMessageBytes = 1024 * 1024;
 
+  /// Maximum payload of one binary input frame.
+  static const int maxInputFrameBytes = 1024 * 1024;
+
+  /// Largest payload the server puts in one output frame.
+  static const int maxOutputFrameBytes = 64 * 1024;
+
   /// Maximum unacknowledged terminal output the server keeps in flight per
   /// client before pausing sends (the PTY keeps filling the ring buffer).
   static const int maxUnackedOutputBytes = 2 * 1024 * 1024;
@@ -34,6 +40,18 @@ abstract final class Limits {
 
   /// Length of a raw terminal-session id in bytes (128-bit random).
   static const int sessionIdBytes = 16;
+
+  /// Maximum length of a session name.
+  static const int maxSessionNameLength = 64;
+
+  /// Maximum length of free-text fields such as `client`, `agent`, `msg`.
+  static const int maxTextLength = 1024;
+
+  /// Maximum number of capability strings in `hello`.
+  static const int maxCaps = 32;
+
+  /// Largest terminal dimension accepted in `attach`/`resize`.
+  static const int maxDimension = 0xFFFF;
 }
 
 /// Layout of binary WebSocket frames carrying terminal data (docs/04).
@@ -56,4 +74,16 @@ abstract final class BinaryFrame {
 
   /// Fixed header size preceding the payload.
   static const int headerLength = 1 + Limits.sessionIdBytes + 8;
+}
+
+/// Capability strings exchanged in `hello.caps`.
+abstract final class Caps {
+  /// Terminal data travels in binary frames (always true for WebSocket).
+  static const String binary = 'binary';
+
+  /// The agent confirms delivered input with `ack_in`.
+  static const String ackIn = 'ack_in';
+
+  /// The agent offers the SSE fallback transport.
+  static const String sse = 'sse';
 }

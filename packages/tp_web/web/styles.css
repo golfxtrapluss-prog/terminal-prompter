@@ -1,9 +1,14 @@
 :root {
   color-scheme: dark;
   --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
   --fg: #e6edf3;
   --muted: #8b949e;
   --accent: #58a6ff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
 }
 
 html, body {
@@ -11,24 +16,65 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 #app {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 16px;
-  box-sizing: border-box;
 }
 
-h1 {
-  margin: 0 0 8px;
-  font-size: 18px;
-  font-weight: 600;
+.topbar, .statusbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 
-p {
-  margin: 0;
+.statusbar {
+  border-top: 1px solid var(--border);
+  border-bottom: none;
   color: var(--muted);
+  font-size: 12px;
+}
+
+.topbar .spacer { flex: 1; }
+.topbar .host { font-weight: 600; }
+.topbar .session, .topbar .rtt, .topbar .transport { color: var(--muted); }
+
+.topbar button {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.topbar button:hover { border-color: var(--accent); }
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bad);
+  flex: 0 0 auto;
+}
+.dot.live { background: var(--ok); }
+.dot.connecting { background: var(--warn); }
+.dot.down { background: var(--bad); }
+
+.terminal {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px;
+  background: var(--bg);
+}
+
+.terminal .xterm {
+  height: 100%;
 }

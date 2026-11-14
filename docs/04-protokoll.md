@@ -83,6 +83,17 @@ Server sender ikke mer enn 2 MB ubekreftet output per klient. Når grensen nås,
 
 Meldingene `exec_start`, `exec_cancel`, `exec_accepted`, `exec_rejected`, `exec_out` (binærframe type `0x03`) og `exec_exit` er reservert og spesifisert i doc 15. v1-agenter svarer `error {code: "unsupported"}`. Binærtype `0x03` skal ikke brukes til noe annet.
 
+## Presiseringer fra implementasjonen (M2)
+
+- **Kapabiliteter** (`caps`): `binary` (terminaldata i binærframes), `ack_in` (agenten bekrefter input), `sse` (agenten tilbyr SSE-fallback). Ukjente strenger ignoreres.
+- **`attach` uten `last_seq`** gir full replay av hele ringbufferen (fra eldste byte). Med `last_seq` sendes bare det som mangler; er `last_seq` eldre enn bufferen, settes `attached.truncated = {from: last_seq, to: eldste}`.
+- **`attached.seq`** er sesjonens nåværende `seq` (neste byte som produseres). Replay-frames som følger har egne `seq`-verdier, og klienten regner `last_seq = seq + len(data)` for siste frame.
+- **`detach`, `resize`, `signal`, `ack`** og input-frames krever at forbindelsen er festet til sesjonen; ellers svares `error {code: "session_not_found"}`.
+- **`kill`** og **`rename`** besvares med en oppdatert `sessions`-melding til avsenderen; festede klienter får `exit` ved `kill`.
+- **Sesjons-ID** i JSON er 26 tegn liten base32 (RFC 4648-alfabet, uten padding) av de 16 rå bytene.
+- **Tidsstempler** (`created`, `last_seen`) er ISO 8601 i UTC.
+- Output-frames er maks 64 KB; input-frames maks 1 MB; kontrollmeldinger maks 1 MB.
+
 ## Versjonering
 
 `v` i `hello`. Agent støtter nåværende og forrige versjon. Nye felter er alltid valgfrie; ukjente felter ignoreres.

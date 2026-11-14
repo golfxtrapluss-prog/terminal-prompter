@@ -12,3 +12,6 @@ packages/tp_agent/lib/src/generated/assets.g.dart
 # Local files
 *.part
 .env
+
+# Editor/session
+.claude/
