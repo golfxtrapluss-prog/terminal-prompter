@@ -51,3 +51,13 @@ Format: Kontekst → Beslutning → Konsekvenser. Nye beslutninger legges til ne
 - **Kontekst:** Brukere må stole på software med root-tilgang; gratis alternativer finnes.
 - **Beslutning:** Agent/klient/protokoll Apache-2.0; relay og Fleet proprietært.
 - **Konsekvenser:** Inntekt avhenger av relay/Fleet (se 09).
+
+## ADR-011: Innebygde web-filer som gzip+base64-strenger
+- **Kontekst:** Doc 02/CLAUDE.md skisserte `Uint8List`-konstanter. En byteliste-literal gir ~4 tegn per byte og gjør `dart format`/analyse treg på en fil på flere MB.
+- **Beslutning:** `tool/embed_assets.dart` skriver hver fil gzip-komprimert som base64 i en `const Map<String, EmbeddedAsset>`. Dekoding skjer ved behov; HTTP-laget cacher. Generert fil er gitignored; verktøyet skriver en tom bunt når `web_build/` mangler, så `make test` ikke krever `make web`.
+- **Konsekvenser:** ~1,33× større kildefil enn rå bytes (men gzip-gevinsten dominerer), raskere verktøykjede, ETag (SHA-256-prefiks) og `Content-Type` beregnes ved generering.
+
+## ADR-012: PTY-leser med `poll` + vekkerør; sesjonsomfattende drap via `/proc`
+- **Kontekst:** En isolate som står i blokkerende `read()` kan ikke stoppes fra hovedisolatet; `close()` på master-fd fra en annen tråd vekker ikke `read()` pålitelig. Bakgrunnsjobber (`sleep 1000 &`) havner i egne prosessgrupper, så `kill(-pgid)` alene etterlater foreldreløse prosesser.
+- **Beslutning:** Leser-isolatet venter i `poll()` på master-fd **og** leseenden av et `pipe2`-rør; én byte i røret stopper leseren deterministisk. Master åpnes `O_NONBLOCK` så skriving aldri blokkerer event-løkken (EAGAIN → kort venting, tidsavbrudd → `PtyWriteTimeout`). `PtyProcess.kill()` signaliserer kommandoens gruppe og deretter alle prosesser i `/proc` med samme sesjons-id; `terminate()` eskalerer TERM → KILL.
+- **Konsekvenser:** To ekstra fd-er per sesjon. `/proc`-skanning koster litt ved drap (sjelden operasjon). Interaktiv bash ignorerer SIGTERM, så drap av en sesjon tar normalt `grace` (standard 2 s) før KILL.

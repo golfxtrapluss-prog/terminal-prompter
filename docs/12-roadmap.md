@@ -6,11 +6,13 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 - Workspace, fire pakker, `analysis_options.yaml`, Makefile, CI som kjører `dart analyze` og tom test.
 - `tp-agent version` skriver versjon.
 - **Akseptanse:** `make test` og `make build` grønt; to binærer i `bin/`.
+- **Status:** ✅ ferdig 14.11.2026 (commit `11c59a8`).
 
 ## M1 – PTY-kjerne (1–2 dager)
 - `lib/src/pty/`: FFI-bindinger, `PtyProcess.start/write/resize/kill`, leser-isolate.
 - `RingBuffer` med byte-seq.
 - **Akseptanse:** komponenttestene i 11 (echo, resize/`stty size`, Ctrl-C, exit-kode, ingen foreldreløse prosesser, sid == pid). Fungerer på x64 og arm64 (CI-runner eller QEMU).
+- **Status:** ✅ kode og tester ferdig 14.11.2026 (`lib/src/pty/`, `lib/src/session/ring_buffer.dart`, ADR-012). Verifisert på x64; arm64 kun kryss-kompilert, ikke kjørt.
 
 ## M2 – Protokoll + WebSocket + minimal klient (2–3 dager)
 - `tp_protocol`: meldinger, codec (JSON + binærframes), tester.

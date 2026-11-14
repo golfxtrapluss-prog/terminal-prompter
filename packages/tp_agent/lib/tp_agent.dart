@@ -5,4 +5,7 @@
 library;
 
 export 'src/cli/runner.dart';
+export 'src/pty/errors.dart';
+export 'src/pty/pty_process.dart';
+export 'src/session/ring_buffer.dart';
 export 'src/version.dart';
