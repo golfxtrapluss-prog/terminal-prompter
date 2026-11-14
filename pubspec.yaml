@@ -1,0 +1,12 @@
+name: terminal_prompter_workspace
+description: Terminal Prompter monorepo (Dart pub workspace).
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+workspace:
+  - packages/tp_protocol
+  - packages/tp_agent
+  - packages/tp_web
+  - packages/tp_netsim

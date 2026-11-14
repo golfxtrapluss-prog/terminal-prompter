@@ -1,0 +1,48 @@
+# Development configuration used by `make run`.
+# No TLS, localhost only. Never use these values on a public server.
+
+mode = "proxy"
+listen = "127.0.0.1:7681"
+base_path = "/"
+public_origin = "http://127.0.0.1:7681"
+
+[auth]
+# Set by `tp-agent init` (milestone M5). Dev password will be "dev".
+password_hash = ""
+totp_secret = ""
+session_ttl = "12h"
+max_failed_logins = 5
+lockout = "15m"
+
+[shell]
+command = "/bin/bash"
+args = ["-l"]
+env = { TERM = "xterm-256color", LANG = "C.UTF-8" }
+workdir = "~"
+wrap = "none"
+
+[sessions]
+max = 8
+idle_timeout = "24h"
+scrollback_bytes = 1048576
+
+[transport]
+heartbeat = "15s"
+output_coalesce = "25ms"
+compression = true
+sse_fallback = true
+
+[files]
+enabled = true
+max_upload = "2GB"
+chunk_size = "256KB"
+root = "~"
+
+[fleet]
+fleet_exec = false
+max_concurrent_runs = 4
+
+[audit]
+enabled = true
+log_input = true
+path = "./dev/audit.jsonl"

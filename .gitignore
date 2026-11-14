@@ -1,0 +1,14 @@
+# Dart
+.dart_tool/
+build/
+*.js.deps
+*.js.map
+
+# Build outputs
+/bin/
+packages/tp_agent/web_build/
+packages/tp_agent/lib/src/generated/assets.g.dart
+
+# Local files
+*.part
+.env

@@ -1,0 +1,24 @@
+# Workspace-wide analysis settings. Packages inherit this file; tp_protocol
+# adds `public_member_api_docs` on top (all public protocol APIs are documented).
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  exclude:
+    - "**/build/**"
+    - "**/web_build/**"
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_dynamic_calls
+    - directives_ordering
+    - prefer_final_in_for_each
+    - prefer_final_locals
+    - prefer_single_quotes
+    - unawaited_futures
+    - unnecessary_lambdas
+    - use_super_parameters

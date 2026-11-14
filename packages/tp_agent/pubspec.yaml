@@ -1,0 +1,21 @@
+name: tp_agent
+description: Terminal Prompter server agent - a real terminal in the browser over HTTPS/443.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.8.0
+
+executables:
+  tp-agent: tp_agent
+
+dependencies:
+  args: ^2.7.0
+  crypto: ^3.0.6
+  path: ^1.9.1
+  tp_protocol: ^0.1.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0
