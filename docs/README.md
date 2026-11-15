@@ -30,5 +30,7 @@ Komplett arkitekturgrunnlag (Dart) for å bygge **Terminal Prompter**: en nettba
 | `docs/13-beslutningslogg.md` | ADR-er: hvorfor Dart, PTY via FFI, dart2js, osv. |
 | `docs/14-ordliste.md` | Begreper |
 | `docs/15-flerserverkjoring.md` | Flerserverkjøring (v2): samme kommando på mange servere |
+| `docs/16-mobil-og-tastelinje.md` | Mobil-først: tastelinje for spesialtegn, PWA, passkeys |
+| `docs/17-tilkobling-og-onboarding.md` | Trygg HTTPS-tilkobling: relay (v1.5), eget domene, veiviser, reservekoder, sjekk før avreise |
 
-Versjon 1.1 – 14.11.2026 (lagt til flerserverkjøring for v2)
+Versjon 1.3 – 15.11.2026 (tilkobling og onboarding, relay flyttet til v1.5, reservekoder, sjekk før avreise)

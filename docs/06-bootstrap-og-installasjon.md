@@ -65,6 +65,12 @@ Steg:
 
 Flagg for ikke-interaktiv bruk: `--mode`, `--domain`, `--email`, `--password-file`, `--sudo`, `--yes`.
 
+## Automatisk HTTPS og relay
+
+- `install.sh --domain tp.example.com`: sjekker DNS, installerer Caddy hvis ingen webserver finnes, tester HTTPS utenfra (rute 2, doc 17).
+- `install.sh --link TPLK-XXXX-XXXX`: kobler serveren til relay uten domene (rute 1, v1.5, doc 17).
+- Uten flagg: interaktiv veiviser som spør hvilken rute.
+
 ## Reverse proxy-snutter (genereres av installer)
 
 **Caddy:**

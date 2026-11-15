@@ -88,4 +88,5 @@ sequenceDiagram
 | Gjenoppkobling etter brudd | < 3 s etter at nett er tilbake |
 | Tåle | 800 ms RTT, 10 % pakketap, 64 kbit/s |
 | Installasjon | < 60 s fra kommando til innlogging |
+| Mobil | Alle funksjoner brukbare på telefon med én hånd (iOS Safari, Android Chrome, siste 2 versjoner); tastelinje lukker aldri telefonens tastatur |
 | Plattform | Linux x64/arm64 med glibc (Alpine via gcompat), `setsid` (util-linux/BusyBox), systemd valgfritt |

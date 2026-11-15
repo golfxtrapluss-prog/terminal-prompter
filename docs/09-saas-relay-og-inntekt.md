@@ -8,6 +8,8 @@ Selvhostet agent (v1) er lett å kopiere med gratisverktøy (ttyd + Caddy). Det 
 2. Én innlogging for mange servere (flåte).
 3. Team, roller, revisjon, SSO – det maritim IT krever.
 
+> **Oppdatert:** Relay for privatbrukere er flyttet til **v1.5** og bruker TLS-gjennomstrømming, så relay ikke kan lese trafikken. Detaljert design, sertifikatflyt, linking, reisepass og prising står i **doc 17** og har forrang. Seksjonen under beskriver v2-utvidelsene (multipleksing av klientsesjoner, flåte, team).
+
 ## Relay-arkitektur (v2)
 
 ```mermaid
@@ -35,7 +37,9 @@ Samme kommando på mange servere, med jobben eid av relay så den fullføres sel
 | Nivå | Pris | Innhold | Formål |
 |---|---|---|---|
 | **Open/Self-host** | Gratis | Agent, én server, direkte modus | Trakt, omdømme, GitHub-stjerner |
-| **Personal** | USD 9/mnd | Relay, opptil 5 servere, TOTP/passkey, 30 dager sesjonshistorikk | Enkeltdriftere offshore |
+| **Reisepass** (v1.5) | USD 9 for 30 dager | Relay for inntil 3 servere, uten abonnement | Cruise, reiser, korte oppdrag |
+| **Personal** (v1.5) | USD 9/mnd eller 90/år | Relay, opptil 5 servere, passkey, reservekoder, synk av egne knapper | Enkeltdriftere offshore |
+| **Founder** (før v1.5) | USD 99 engangs = 3 år Personal | Selges på venteliste | Teste etterspørsel |
 | **Pro** | USD 19/mnd per bruker | Ubegrenset servere, flerserverkjøring (inntil 10 mål per jobb), snuttbibliotek synk, filoverføring via relay, E2E | Konsulenter, MSP-er |
 | **Fleet (bedrift)** | USD 29/bruker/mnd, min. 10 brukere, eller årsavtale | Ubegrenset flerserverkjøring, SSO, roller, godkjenningsflyt for farlige kommandoer, sentral auditeksport, SLA | Rederier, subsea-selskaper, riggoperatører |
 | **On-prem relay-lisens** | Engangs USD 3–10k + 20 %/år vedlikehold | Relay i kundens eget datasenter | Kunder som ikke kan bruke sky |

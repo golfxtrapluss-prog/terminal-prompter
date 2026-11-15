@@ -24,4 +24,12 @@
 | **FFI** | Foreign Function Interface (`dart:ffi`) – kall til C-funksjoner i libc |
 | **Flerserverkjøring / jobb / kjøring** | Én kommando sendt til mange servere (jobb) og utførelsen på hver enkelt server (kjøring), se doc 15 |
 | **Kanari** | Kjør på én server først og godkjenn før resten |
+| **Tastelinje** | Rad med spesialtegn og terminaltaster over telefonens tastatur (doc 16) |
+| **PWA** | Progressive Web App: nettside som kan installeres på hjemskjermen som en app |
+| **Passkey / WebAuthn** | Innlogging med fingeravtrykk/ansikt/nøkkel i stedet for passord |
+| **SNI** | Server Name Indication: vertsnavnet i starten av et TLS-håndtrykk, som relay ruter på uten å dekryptere |
+| **TLS-gjennomstrømming** | Relay videresender kryptert trafikk uten å kunne lese den |
+| **CSR** | Sertifikatforespørsel laget med agentens egen nøkkel |
+| **Reservekoder** | Engangskoder for innlogging når passkey-enheten er tapt |
+| **Reisepass** | Tidsbegrenset relay-tilgang uten abonnement |
 | **Isolate** | Darts tråd-ekvivalent med egen minnehaug; brukes for blokkerende PTY-lesing |

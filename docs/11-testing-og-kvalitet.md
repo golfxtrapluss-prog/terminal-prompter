@@ -10,6 +10,7 @@
 | Nettverk | Integrasjonstestene gjennom `tp_netsim` med profilene geo/leo/hostile | `--tags netsim` | Hver PR + nattlig |
 | Nettleser | Klientlogikk (tilstandsmaskin, prompter-kø) | `dart test -p chrome` | Hver PR |
 | Ende-til-ende | Playwright mot ekte agent i Docker: logg inn, kjør kommando, vim, filopplasting | Playwright (eneste ikke-Dart-verktøy, kun test) | Før release |
+| Mobil | Playwright med mobilemulering + manuell test på ekte iPhone og Android (doc 16) | Playwright + sjekkliste | Hver PR (emulering) / før release (ekte) |
 | Manuell | Fra ekte skipsnett / Starlink / mobil-hotspot med `tc netem` | Sjekkliste | Før release |
 
 ## Kritiske testscenarier (må finnes fra M3)
@@ -23,6 +24,7 @@
 7. **Sikkerhet:** feil Origin → 403; uten cookie → 401; 6 feil passord → lockout; `../../etc/shadow` i filer → 400.
 8. **Prosess-tre:** `kill` sesjon med bakgrunnsjobber → ingen foreldreløse prosesser igjen.
 9. **Keymap rundtur:** for alle layout-par, `shown(encode(x)) == x`.
+10. **Tastelinje:** trykk på knapper lukker ikke telefonens tastatur; Ctrl+C fra linje + telefontastatur gir `\x03`; piltaster gir riktig sekvens i begge cursor-modi.
 
 ## Ytelsesmål (måles i CI med netsim)
 

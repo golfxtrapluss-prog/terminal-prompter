@@ -24,8 +24,16 @@ Terminal Prompter gir **root-ekvivalent tilgang via nettleser på port 443**. Et
 - Første oppsett: `tp-agent init` genererer et sterkt tilfeldig passord (vises én gang) eller lar brukeren sette eget (min. 12 tegn, sjekk mot topp-10k-liste).
 - argon2id-parametre: m=64 MiB, t=3, p=2 (`pointycastle` Argon2BytesGenerator; kjøres i `Isolate.run` så innlogging ikke blokkerer event-løkken).
 - TOTP: RFC 6238 (egen implementasjon, HMAC-SHA1 fra `package:crypto`, testet mot RFC-vektorer), 30 s, ±1 vindu, gjenbruksvern (siste brukte kode huskes).
-- v2: WebAuthn/passkeys (sterkest og enklest på mobil).
+- **v1: WebAuthn/passkeys** – anbefalt metode, særlig på telefon (doc 16). Passord beholdes som reserve.
 - v2 (relay): OIDC/SSO for bedriftskunder (Entra ID, Google).
+
+## Reservekoder
+
+10 engangskoder for når passkey-enheten er tapt (f.eks. telefon mistet på sjøen). Lagres som argon2id-hasher, virker én gang, ny generering ugyldiggjør gamle. Detaljer i doc 17.
+
+## Relay og tillit (v1.5)
+
+Relay ruter TLS gjennom uten å terminere den (SNI-ruting), og agentens TLS-privatnøkkel lages og blir på serveren. Relay kan derfor ikke lese kommandoer eller output. Dette dokumenteres åpent på nettsiden, fordi det er hovedargumentet for å stole på tjenesten. Detaljer i doc 17.
 
 ## Sikkerhetshoder
 

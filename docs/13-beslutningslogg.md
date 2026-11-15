@@ -42,6 +42,26 @@ Format: Kontekst → Beslutning → Konsekvenser. Nye beslutninger legges til ne
 - **Beslutning:** Keymap-kompensator er et eget bootstrap-verktøy; den løpende terminalen gjør ingen oversettelse.
 - **Konsekvenser:** Enklere og mer korrekt kjerne. Kompensatoren blir et tydelig, demonstrerbart salgsargument.
 
+## ADR-013: Personal relay i v1.5 med TLS-gjennomstrømming
+- **Kontekst:** Domene og sertifikat stopper de fleste brukere. Relay er både den enkleste tilkoblingen og hovedkilden til inntekt, men lå i v2.
+- **Beslutning:** En enkel relay for privatbrukere kommer i v1.5 (M7). Relay ruter TLS på SNI uten å terminere den. Agenten lager egen TLS-nøkkel, og relay skaffer sertifikat for agentens CSR via DNS-01. Flerserverkjøring og Fleet blir i v2.
+- **Konsekvenser:** Abonnementsinntekt 1–2 måneder tidligere. Relay kan ikke lese trafikk, som er et sterkt tillitsargument. Krever DNS-API, Public Suffix List-søknad og en enkel tunnelprotokoll.
+
+## ADR-014: Reservekoder og sjekk før avreise
+- **Kontekst:** Målgruppen er på sjøen i uker. Mister de telefonen eller noe er feilkonfigurert, er de utelåst lenge.
+- **Beslutning:** Obligatoriske reservekoder og en «Sjekk før avreise» som verifiserer hele kjeden.
+- **Konsekvenser:** Litt mer onboarding, men færre utelåste brukere og færre supporthenvendelser fra sjøen.
+
+## ADR-011: Mobil-først med tastelinje
+- **Kontekst:** En stor del av hensikten er å drifte servere fra telefon. Telefontastaturer mangler Esc, Tab, Ctrl, piltaster, F-taster og har spesialtegn gjemt.
+- **Beslutning:** Klienten designes mobil-først. Alltid tilgjengelig tastelinje (doc 16) med spesialtegn, låsbare modifikatorer og egne knapper. PWA. Tastetabellen ligger i `tp_protocol`.
+- **Konsekvenser:** M4 vokser med 2–3 dager. Manuell test på ekte telefoner før hver release. Sterkt salgsargument mot ttyd/Wetty (dårlige på mobil) og Termius (SSH, stopper på skipsnett).
+
+## ADR-012: Passkeys i v1
+- **Kontekst:** Lange passord + TOTP er tungvint på telefon.
+- **Beslutning:** WebAuthn flyttes fra v2 til v1 (M5). Egen verifisering i agenten med `cbor` + `pointycastle`, kun attestasjon `none`.
+- **Konsekvenser:** Ny avhengighet `cbor`. Mer sikkerhetskritisk kode som må testes mot kjente WebAuthn-testvektorer.
+
 ## ADR-010: Flerserverkjøring i v2, eid av relay
 - **Kontekst:** Brukeren vil kjøre samme kommando på mange servere. Fra skip kan ikke klienten holde forbindelsen gjennom hele jobben.
 - **Beslutning:** Funksjonen kommer i v2.0 sammen med relay. Relay eier jobben; agenten kjører hver kjøring i eget ikke-interaktivt skall; kanari er standard.
@@ -52,12 +72,12 @@ Format: Kontekst → Beslutning → Konsekvenser. Nye beslutninger legges til ne
 - **Beslutning:** Agent/klient/protokoll Apache-2.0; relay og Fleet proprietært.
 - **Konsekvenser:** Inntekt avhenger av relay/Fleet (se 09).
 
-## ADR-011: Innebygde web-filer som gzip+base64-strenger
+## ADR-015: Innebygde web-filer som gzip+base64-strenger
 - **Kontekst:** Doc 02/CLAUDE.md skisserte `Uint8List`-konstanter. En byteliste-literal gir ~4 tegn per byte og gjør `dart format`/analyse treg på en fil på flere MB.
 - **Beslutning:** `tool/embed_assets.dart` skriver hver fil gzip-komprimert som base64 i en `const Map<String, EmbeddedAsset>`. Dekoding skjer ved behov; HTTP-laget cacher. Generert fil er gitignored; verktøyet skriver en tom bunt når `web_build/` mangler, så `make test` ikke krever `make web`.
 - **Konsekvenser:** ~1,33× større kildefil enn rå bytes (men gzip-gevinsten dominerer), raskere verktøykjede, ETag (SHA-256-prefiks) og `Content-Type` beregnes ved generering.
 
-## ADR-012: PTY-leser med `poll` + vekkerør; sesjonsomfattende drap via `/proc`
+## ADR-016: PTY-leser med `poll` + vekkerør; sesjonsomfattende drap via `/proc`
 - **Kontekst:** En isolate som står i blokkerende `read()` kan ikke stoppes fra hovedisolatet; `close()` på master-fd fra en annen tråd vekker ikke `read()` pålitelig. Bakgrunnsjobber (`sleep 1000 &`) havner i egne prosessgrupper, så `kill(-pgid)` alene etterlater foreldreløse prosesser.
 - **Beslutning:** Leser-isolatet venter i `poll()` på master-fd **og** leseenden av et `pipe2`-rør; én byte i røret stopper leseren deterministisk. Master åpnes `O_NONBLOCK` så skriving aldri blokkerer event-løkken (EAGAIN → kort venting, tidsavbrudd → `PtyWriteTimeout`). `PtyProcess.kill()` signaliserer kommandoens gruppe og deretter alle prosesser i `/proc` med samme sesjons-id; `terminate()` eskalerer TERM → KILL.
 - **Konsekvenser:** To ekstra fd-er per sesjon. `/proc`-skanning koster litt ved drap (sjelden operasjon). Interaktiv bash ignorerer SIGTERM, så drap av en sesjon tar normalt `grace` (standard 2 s) før KILL.

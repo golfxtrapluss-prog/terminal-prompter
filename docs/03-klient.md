@@ -22,9 +22,11 @@
 │ │ docker logs -f coolify-proxy | grep -i error             │ │  ← Prompter-felt (multilinje)
 │ └──────────────────────────────────────────────────────────┘ │
 │ Ctrl+Enter send · ↑↓ historikk · Ctrl+R søk           [Send] │
-│ [Esc][Tab][Ctrl-C][Ctrl-D][Ctrl-Z][↑][↓][|][~][/][$][>]      │  ← spesialtegnrad (mobil)
+│ Esc Tab Ctrl Alt ← ↓ ↑ → | / - ~      ● ○ ○ ○              │  ← tastelinje (doc 16), sveip for flere rader
 └──────────────────────────────────────────────────────────────┘
 ```
+
+> **Mobil-først:** Oppsettet over er PC-visningen. Telefonvisning, tastelinjen for spesialtegn og alle mobilkrav er spesifisert i **doc 16** og har forrang ved konflikt.
 
 ## Moduser
 
@@ -42,6 +44,7 @@ Bytte: `Ctrl+Shift+Space` eller knapp. Klienten foreslår Raw automatisk ved alt
 - **Snutter:** navngitte kommandoer med variabler (`docker logs -f {{container}}`), eksport/import JSON.
 - **Farlige kommandoer:** regex-liste gir bekreftelsesdialog (konfigurerbar).
 - **Signaler:** Ctrl-C/D/Z virker også i Prompter-modus.
+- **Tastelinje:** spesialtegn, låsbare Ctrl/Alt, piltaster, F-taster og egne knapper (doc 16).
 - **Kø ved brudd:** kommandoer merkes «venter på nett», sendes ved gjenopprettet forbindelse; kø eldre enn 60 s krever ny bekreftelse.
 - **Leveringsstatus:** ⏳ til `ack_in` mottas, ✓ etterpå.
 
@@ -73,6 +76,11 @@ lib/src/conn/ws_transport.dart      web.WebSocket (binaryType = arraybuffer)
 lib/src/conn/sse_transport.dart     web.EventSource + fetch POST
 lib/src/ui/terminal_view.dart
 lib/src/ui/prompter.dart            felt, historikk, snutter, kø
+lib/src/ui/keybar.dart              tastelinje: rader, modifikatorer, langt trykk, gjentakelse
+lib/src/ui/viewport.dart            VisualViewport, tastaturhøyde, dvh
+lib/src/ui/touch.dart               knipezoom, rulling, markering
+lib/src/pwa/                        service worker-registrering
+web/manifest.webmanifest, web/sw.js, web/icons/
 lib/src/ui/topbar.dart
 lib/src/ui/files.dart
 lib/src/ui/settings.dart

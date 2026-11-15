@@ -14,11 +14,12 @@ Du bygger **Terminal Prompter**. **Hele prosjektet skrives i Dart** (agent, klie
 - **TLS:** Agenten kjører bak reverse proxy (Caddy/Traefik/nginx) på `127.0.0.1:7681` (standard), eller `standalone` med sertifikatfiler (`SecurityContext`). Ingen innebygd ACME i v1 (ingen moden Dart-ACME-klient) – installer setter opp Caddy ved behov.
 - **Auth:** Passord (argon2id via `pointycastle`) + valgfri TOTP (egen implementasjon med `package:crypto`). Cookie `HttpOnly; Secure; SameSite=Strict`. Origin-sjekk på WS.
 - **Konfig:** `/etc/tp-agent/config.toml` (`package:toml`), overstyrbar med env `TP_*`.
+- **Mobil-først:** telefon er en hovedenhet. Tastelinjen for spesialtegn (doc 16) skal alltid være lett tilgjengelig og må aldri lukke telefonens tastatur. Test UI-endringer i mobilvisning først.
 - **Kode og kommentarer på engelsk.** UI engelsk + norsk (i18n).
 
 ## Tillatte avhengigheter (agent)
 
-`args`, `toml`, `crypto`, `pointycastle`, `cryptography` (ed25519-verifisering), `ffi`, `path`, `logging`, `meta`. Dev: `test`, `lints`, `mocktail`. Nye avhengigheter krever ADR.
+`args`, `toml`, `crypto`, `pointycastle`, `cryptography` (ed25519-verifisering), `cbor` (WebAuthn), `ffi`, `path`, `logging`, `meta`. Dev: `test`, `lints`, `mocktail`. Nye avhengigheter krever ADR.
 
 ## Tillatte avhengigheter (klient)
 
@@ -35,7 +36,7 @@ Du bygger **Terminal Prompter**. **Hele prosjektet skrives i Dart** (agent, klie
 
 ## Byggerekkefølge
 
-Følg milepælene i `docs/12-roadmap.md` strengt M0 → M8. Start ikke på relay (M7) før M1–M5 er grønne.
+Følg milepælene i `docs/12-roadmap.md` strengt M0 → M8. Start ikke på relay (M7, v1.5) før M1–M6.8 er grønne. Relay skal aldri terminere TLS for agent-domener eller få tilgang til agentens TLS-privatnøkkel (ADR-013).
 
 ## Kommandoer
 

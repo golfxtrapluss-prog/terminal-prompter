@@ -27,12 +27,13 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 - `tp_netsim` + nettverkstester (scenario 1–6 i doc 11).
 - **Akseptanse:** alle netsim-scenarier grønne med profil `geo` og `leo`.
 
-## M4 – Prompter-modus (2 dager)
+## M4 – Prompter-modus, tastelinje og mobil (4–5 dager)
 - Prompter-felt, multilinje + bracketed paste, historikk, Ctrl+R, kø ved brudd, leveringsstatus, spesialtegnrad, auto-bytte ved alternate screen, farlige-kommando-bekreftelse.
-- **Akseptanse:** på `geo`-profil oppleves skriving som lokal; kø-scenario fungerer.
+- **Tastelinje og mobil (doc 16):** alle fire rader, låsbare modifikatorer, langt trykk, gjentakelse, VisualViewport-tilpasning, Prompter som standard på mobil, knipezoom, PWA (manifest + service worker).
+- **Akseptanse:** på `geo`-profil oppleves skriving som lokal; kø-scenario fungerer; på ekte iPhone og Android kan man åpne vim, redigere, lagre med `Esc :wq` og avslutte htop med `F10` kun via tastelinjen, uten at telefonens tastatur lukkes.
 
 ## M5 – Sikkerhet og innlogging (2–3 dager)
-- `tp-agent init/passwd/totp`, argon2id, TOTP, cookie + CSRF, Origin-sjekk, rate limit, lockout, sikkerhetshoder, auditlogg, `base_path`.
+- `tp-agent init/passwd/totp`, argon2id, TOTP, **passkeys (WebAuthn)**, cookie + CSRF, Origin-sjekk, rate limit, lockout, sikkerhetshoder, auditlogg, `base_path`.
 - **Akseptanse:** sikkerhetsscenariene i doc 11 grønne; ingen hemmeligheter i logger (grep-test).
 
 ## M6 – Installasjon, filer, SSE, flere sesjoner (3 dager)
@@ -48,21 +49,29 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 - Statisk eksport (én HTML-fil) for hosting på produktdomene.
 - **Akseptanse:** rundtur-tester; manuell test i Hetzner-konsoll med norsk tastatur → agent installert uten å skrive ett problemtegn.
 
-### ➜ v1.0 Self-host-lansering (GitHub, Apache-2.0)
+### ➜ v1.0 Self-host-lansering (GitHub, Apache-2.0) etter M6.8
 
-## M7 – Relay (v2) (2–3 uker)
-- Relay-server i Dart, Postgres, kontoer, agent-linking (`tp-agent link KODE`), multipleksing (`channel_id`), webdashbord med serverliste.
-- Stripe-abonnement (Personal/Pro).
-- **Akseptanse:** agent bak NAT uten åpne porter nås fra nettleser; betaling aktiverer plan.
+## M6.8 – Reservekoder og sjekk før avreise (2 dager)
+- Reservekoder (doc 17) i agenten, «Sjekk før avreise» og tilkoblingsveiviser for rute 2 og 3.
+- Venteliste med founder-lisens (Stripe Checkout, enkel landingsside) åpnes samtidig med v1-lansering.
+- **Akseptanse:** sjekken oppdager hvert feilpunkt i tabellen i doc 17; en reservekode logger inn én gang og aldri igjen.
 
-## M7.5 – Flerserverkjøring (v2.0) (1–2 uker)
+## M7 – Personal relay (v1.5) (2–3 uker)
+- Se doc 17. Relay i Dart: kontoer, innlogging (passkey + reservekoder), dashbord med serverliste, linking (`tp-agent link KODE`), agent-tunnel, SNI-ruter med TLS-gjennomstrømming, sertifikater via CSR + DNS-01, wildcard-DNS.
+- Stripe: Personal, reisepass, founder-lisens.
+- Tilkoblingsveiviser med rute 1.
+- **Akseptanse:** kriteriene i doc 17, inkludert at relay aldri ser klartekst eller agentens privatnøkkel.
+
+### ➜ v1.5-lansering: betalt relay for privatbrukere
+
+## M7.5 – Flerserverkjøring (v2.0) (1–2 uker, bygger på relay fra M7)
 - Se doc 15. Merkelapper og grupper, jobber med kanari/parallell/rullerende/sekvensiell, stopp ved feil, tidsavbrudd, avbryt.
 - Agent: `exec_start/cancel`, egen PTY per kjøring, `fleet_exec`-bryter, idempotens på `run`-ID.
 - Relay: jobbmotor som eier utførelsen uavhengig av klientforbindelsen, kø for frakoblede mål, lagring av output.
 - Klient: målvelger med forhåndsvisning, skalert bekreftelse, resultatvisning gruppert etter identisk output, «kjør på nytt på feilede».
 - **Akseptanse:** jobb mot 20 testagenter fullføres korrekt selv om klienten kobles fra rett etter innsending; kanari stopper resten ved feil; duplikat `exec_start` kjøres én gang; farlig kommando krever kanari.
 
-### ➜ v2.0-lansering: relay + flerserverkjøring
+### ➜ v2.0-lansering: Pro med flerserverkjøring
 
 ## M8 – Fleet (v2.x)
 - Team, roller, SSO (OIDC), sentral audit, godkjenningsflyt (også for flerserverjobber), delte jobbmaler, E2E-kryptering, passkeys.
@@ -70,4 +79,4 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 
 ## Estimat
 
-M0–M6.5 ≈ 3–4 uker effektiv utviklingstid med Claude Code – realistisk over 1–2 friperioder i rotasjonen.
+M0–M6.8 (v1.0) ≈ 5 uker. M7 (v1.5, første inntekt fra abonnement) ≈ 2–3 uker til. Founder-lisenser kan selges fra v1.0 effektiv utviklingstid med Claude Code – realistisk over 1–2 friperioder i rotasjonen.
