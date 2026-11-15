@@ -26,6 +26,7 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 - Klientens tilstandsmaskin og backoff.
 - `tp_netsim` + nettverkstester (scenario 1–6 i doc 11).
 - **Akseptanse:** alle netsim-scenarier grønne med profil `geo` og `leo`.
+- **Status:** ✅ ferdig 15.11.2026. `make netsim` kjører scenario 1–4 og 6 fra doc 11 mot `geo` og `leo`; scenario 5 (WS blokkert → SSE) venter på SSE-transporten i M6. Klientens tilstandsmaskin testes på VM med falsk transport (`packages/tp_web/test/connection_test.dart`).
 
 ## M4 – Prompter-modus, tastelinje og mobil (4–5 dager)
 - Prompter-felt, multilinje + bracketed paste, historikk, Ctrl+R, kø ved brudd, leveringsstatus, spesialtegnrad, auto-bytte ved alternate screen, farlige-kommando-bekreftelse.

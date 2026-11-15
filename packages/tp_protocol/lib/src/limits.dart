@@ -50,6 +50,17 @@ abstract final class Limits {
   /// Maximum number of capability strings in `hello`.
   static const int maxCaps = 32;
 
+  /// Maximum length of `hello.instance`.
+  static const int maxInstanceIdLength = 64;
+
+  /// A paused (non-acking) client whose resume point has left the ring
+  /// buffer, or whose unacknowledged output exceeds this, is disconnected
+  /// (docs/02 "Treg abonnent"); it resumes from `last_seq`.
+  static const int slowConsumerDisconnectBytes = 4 * 1024 * 1024;
+
+  /// Reconnect backoff schedule in seconds (docs/03), with jitter applied.
+  static const List<double> backoffSeconds = [0.5, 1, 2, 4, 8, 10];
+
   /// Largest terminal dimension accepted in `attach`/`resize`.
   static const int maxDimension = 0xFFFF;
 }

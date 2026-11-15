@@ -49,7 +49,7 @@ run: web gen-assets
 
 test: analyze
 > cd packages/tp_protocol && $(DART) test
-> cd packages/tp_agent    && $(DART) test
+> cd packages/tp_agent    && $(DART) test --exclude-tags netsim
 > cd packages/tp_netsim   && $(DART) test
 > cd packages/tp_web      && $(DART) test
 ifneq ($(CHROME),)

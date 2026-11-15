@@ -94,6 +94,13 @@ Meldingene `exec_start`, `exec_cancel`, `exec_accepted`, `exec_rejected`, `exec_
 - **Tidsstempler** (`created`, `last_seen`) er ISO 8601 i UTC.
 - Output-frames er maks 64 KB; input-frames maks 1 MB; kontrollmeldinger maks 1 MB.
 
+### Tillegg fra M3 (robusthet)
+
+- **`hello.instance`** (valgfri streng, maks 64 tegn): tilfeldig ID per klientinstans (fane). Agenten husker siste 256 `client_msg_id` **per sesjon og instans**, så input som sendes på nytt etter en gjenoppkobling (ny forbindelse, samme instans) skrives bare én gang, men bekreftes med `ack_in` hver gang. Uten `instance` gjelder idempotensen bare innenfor én forbindelse.
+- **Flytkontroll i praksis:** agenten sender live output til en klient inntil 2 MB er ubekreftet, og pauser deretter. Ved `ack` som bringer ubekreftet under 1 MB tas det igjen fra ringbufferen. Er klientens posisjon overskrevet i mellomtiden (eller ligger mer enn 4 MB bak), lukkes forbindelsen med WebSocket-kode 1008 «slow consumer»; klienten kobler til igjen med `last_seq` og får `attached.truncated`. Minnet per treg klient er dermed begrenset av ringbufferen.
+- **Heartbeat:** agenten sender WebSocket-ping-rammer (protokollnivå, usynlige for applikasjonen) hvert `transport.heartbeat` (standard 15 s). Uteblir pong innen **samme intervall**, lukker agenten forbindelsen (dart:io-semantikk: tidsavbrudd = intervall). Klienten sender i tillegg `ping` hvert 15 s og regner forbindelsen som død etter 30 s uten mottatte rammer. Heartbeat må være lengre enn RTT; for satellitt er 15 s god margin.
+- **Klientens gjenoppkobling:** backoff 0,5/1/2/4/8/10 s med ±25 % jitter, nullstilles når forbindelsen er live; umiddelbart nytt forsøk ved `online`-hendelse og når fanen blir synlig. Ubekreftet input sendes på nytt med samme `client_msg_id` etter `attached`.
+
 ## Versjonering
 
 `v` i `hello`. Agent støtter nåværende og forrige versjon. Nye felter er alltid valgfrie; ukjente felter ignoreres.

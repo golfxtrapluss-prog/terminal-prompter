@@ -51,6 +51,9 @@ final class Session {
   /// Retained output.
   final RingBuffer buffer;
 
+  /// Input idempotency per client instance (docs/04).
+  final InputDeduper deduper = InputDeduper();
+
   /// How long output is batched before being sent to subscribers.
   final Duration coalesce;
 

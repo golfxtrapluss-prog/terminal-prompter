@@ -44,7 +44,12 @@ final class TopBar {
     final (cls, title, session) = switch (state) {
       Live(:final name) => ('dot live', 'connected', name),
       Connecting() => ('dot connecting', 'connecting', ''),
-      Disconnected(:final reason) => ('dot down', reason, ''),
+      Attaching() => ('dot connecting', 'attaching', ''),
+      Disconnected(:final reason, :final retryIn) => (
+        'dot down',
+        retryIn == null ? reason : '$reason, retrying in ${retryIn.inSeconds}s',
+        '',
+      ),
     };
     _dot.className = cls;
     _dot.title = title;

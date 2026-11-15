@@ -132,6 +132,7 @@ final class ClientHello extends ClientMessage {
     required this.version,
     required this.client,
     this.caps = const [],
+    this.instance,
   });
 
   /// Protocol version the client speaks.
@@ -142,6 +143,10 @@ final class ClientHello extends ClientMessage {
 
   /// Capability strings, see `Caps`.
   final List<String> caps;
+
+  /// Random id of this client instance (browser tab). Input idempotency is
+  /// tracked per instance so resends after a reconnect are deduplicated.
+  final String? instance;
 
   @override
   String get type => 'hello';

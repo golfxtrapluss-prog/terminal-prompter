@@ -4,29 +4,10 @@ import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
 
-/// A frame received from the agent.
-sealed class ServerFrame {
-  const ServerFrame();
-}
-
-/// JSON control message.
-final class TextServerFrame extends ServerFrame {
-  const TextServerFrame(this.text);
-
-  /// The JSON text.
-  final String text;
-}
-
-/// Binary terminal-data frame.
-final class BinaryServerFrame extends ServerFrame {
-  const BinaryServerFrame(this.bytes);
-
-  /// Raw frame bytes.
-  final Uint8List bytes;
-}
+import 'transport.dart';
 
 /// Browser WebSocket transport (`binaryType = arraybuffer`).
-final class WsClientTransport {
+final class WsClientTransport implements ClientTransport {
   /// Opens a WebSocket to [url].
   WsClientTransport(String url) : _socket = web.WebSocket(url) {
     _socket.binaryType = 'arraybuffer';
@@ -48,7 +29,7 @@ final class WsClientTransport {
       }
     }).toJS;
     _socket.onclose = ((web.CloseEvent event) {
-      _closeCode = event.code;
+      closeCode = event.code;
       if (!_opened.isCompleted) {
         _opened.completeError(StateError('WebSocket closed (${event.code})'));
       }
@@ -59,30 +40,29 @@ final class WsClientTransport {
   final web.WebSocket _socket;
   final Completer<void> _opened = Completer<void>();
   final StreamController<ServerFrame> _frames = StreamController<ServerFrame>();
-  int? _closeCode;
-
-  /// Completes when the socket is open; fails if it never opens.
-  Future<void> get opened => _opened.future;
-
-  /// Frames from the agent; ends when the socket closes.
-  Stream<ServerFrame> get frames => _frames.stream;
 
   /// WebSocket close code once closed.
-  int? get closeCode => _closeCode;
+  int? closeCode;
 
-  /// True while the socket is open.
+  @override
+  Future<void> get opened => _opened.future;
+
+  @override
+  Stream<ServerFrame> get frames => _frames.stream;
+
+  @override
   bool get isOpen => _socket.readyState == web.WebSocket.OPEN;
 
-  /// Sends a JSON control message.
+  @override
   void sendText(String text) {
     if (isOpen) _socket.send(text.toJS);
   }
 
-  /// Sends a binary frame.
+  @override
   void sendBinary(Uint8List bytes) {
     if (isOpen) _socket.send(bytes.toJS);
   }
 
-  /// Closes the socket.
+  @override
   void close() => _socket.close();
 }

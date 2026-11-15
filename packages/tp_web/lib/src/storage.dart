@@ -1,11 +1,13 @@
 import 'package:web/web.dart' as web;
 
+import 'conn/transport.dart';
+
 /// `localStorage` wrapper that never throws (private mode, blocked storage,
 /// quota). Values are per origin, so per agent (docs/03).
-final class Storage {
-  const Storage();
+final class BrowserStorage implements KeyValueStore {
+  const BrowserStorage();
 
-  /// Reads [key], or null when missing or storage is unavailable.
+  @override
   String? read(String key) {
     try {
       return web.window.localStorage.getItem(key);
@@ -14,7 +16,7 @@ final class Storage {
     }
   }
 
-  /// Writes [key]; silently ignored when storage is unavailable.
+  @override
   void write(String key, String value) {
     try {
       web.window.localStorage.setItem(key, value);
@@ -23,7 +25,7 @@ final class Storage {
     }
   }
 
-  /// Removes [key]; silently ignored when storage is unavailable.
+  @override
   void remove(String key) {
     try {
       web.window.localStorage.removeItem(key);

@@ -2,3 +2,4 @@
 library;
 
 export 'src/profiles.dart';
+export 'src/proxy.dart';

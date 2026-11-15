@@ -17,6 +17,18 @@ jobs:
       - run: make bootstrap
       - run: make test
 
+  netsim:
+    name: Satellite-network scenarios
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.14.0
+      - run: make bootstrap
+      - run: make netsim
+
   build:
     name: Build binaries (x64 + arm64)
     runs-on: ubuntu-latest

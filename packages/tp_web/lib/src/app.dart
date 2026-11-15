@@ -1,6 +1,11 @@
+import 'dart:js_interop';
+
 import 'package:web/web.dart' as web;
 
+import 'client_info.dart';
 import 'conn/connection.dart';
+import 'conn/ws_transport.dart';
+import 'storage.dart';
 import 'ui/dom.dart';
 import 'ui/terminal_view.dart';
 import 'ui/topbar.dart';
@@ -20,7 +25,26 @@ final class App {
     web.document.title = 'Terminal Prompter';
     final terminalHost = el('main', className: 'terminal');
     final terminal = TerminalView(terminalHost);
-    final connection = Connection(terminal: terminal, wsUrl: _wsUrl());
+    final connection = Connection(
+      terminal: terminal,
+      wsUrl: _wsUrl(),
+      transportFactory: WsClientTransport.new,
+      clientId: clientIdentifier(),
+      store: const BrowserStorage(),
+    );
+    // Retry at once when the network or the tab comes back (docs/03).
+    web.window.addEventListener(
+      'online',
+      ((web.Event _) => connection.notifyOnline()).toJS,
+    );
+    web.document.addEventListener(
+      'visibilitychange',
+      ((web.Event _) {
+        if (web.document.visibilityState == 'visible') {
+          connection.notifyVisible();
+        }
+      }).toJS,
+    );
     final topbar = TopBar(connection);
     final footer = el(
       'footer',

@@ -26,10 +26,16 @@ String encodeMessage(ProtocolMessage message) =>
 Map<String, Object?> messageToJson(ProtocolMessage message) {
   final map = <String, Object?>{'t': message.type};
   switch (message) {
-    case ClientHello(:final version, :final client, :final caps):
+    case ClientHello(
+      :final version,
+      :final client,
+      :final caps,
+      :final instance,
+    ):
       map['v'] = version;
       map['client'] = client;
       map['caps'] = caps;
+      if (instance != null) map['instance'] = instance;
     case Attach(
       :final session,
       :final name,
@@ -124,6 +130,7 @@ ClientMessage decodeClientMessage(String text) {
         version: m.int_('v', min: 0),
         client: m.string('client', max: Limits.maxTextLength),
         caps: m.caps(),
+        instance: m.stringOrNull('instance', max: Limits.maxInstanceIdLength),
       );
     case 'attach':
       return Attach(

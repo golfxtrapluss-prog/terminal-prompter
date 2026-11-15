@@ -142,6 +142,9 @@ final class AgentServer {
           ? CompressionOptions.compressionDefault
           : CompressionOptions.compressionOff,
     );
+    // Protocol-level pings keep proxies from cutting idle connections and
+    // detect dead peers (docs/07); browsers answer pong frames automatically.
+    socket.pingInterval = config.transport.heartbeat;
     final info = request.connectionInfo;
     final peer = info == null
         ? 'unknown'

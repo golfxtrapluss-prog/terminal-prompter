@@ -1,32 +1,46 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:tp_protocol/tp_protocol.dart';
 
-import '../client_info.dart';
-import '../storage.dart';
-import 'ws_transport.dart';
+import 'transport.dart';
 
-/// Connection state shown in the top bar.
+/// Connection state (docs/03 "Tilkoblingsmotor").
+///
+/// ```text
+/// disconnected -> connecting -> attaching -> live
+///       ^             |            |          |
+///       +--- backoff <+------------+----------+
+/// ```
+/// `authCheck` is added in M5 together with login.
 sealed class ConnState {
   const ConnState();
 }
 
 /// Not connected; [reason] explains why, [retryIn] when the next attempt is.
 final class Disconnected extends ConnState {
-  const Disconnected(this.reason, {this.retryIn});
+  const Disconnected(this.reason, {this.retryIn, this.attempt = 0});
 
   /// Short description.
   final String reason;
 
   /// Delay until the next attempt, if one is scheduled.
   final Duration? retryIn;
+
+  /// Number of consecutive failed attempts.
+  final int attempt;
 }
 
-/// Socket opening or handshake in progress.
+/// Socket opening or `hello` in flight.
 final class Connecting extends ConnState {
   const Connecting();
+}
+
+/// `attach` sent, waiting for `attached`.
+final class Attaching extends ConnState {
+  const Attaching();
 }
 
 /// Attached to a session and exchanging data.
@@ -55,37 +69,62 @@ abstract interface class TerminalSink {
   void clearAll();
 }
 
-/// Milestone M2 connection engine: connect, hello, attach, exchange frames,
-/// resume with `last_seq` after a drop, fixed reconnect delay. The full
-/// backoff state machine and SSE fallback arrive in M3 (docs/03).
+/// Connection engine: connect, hello, attach, exchange frames, resume with
+/// `last_seq`, reconnect with jittered backoff, heartbeat watchdog, and
+/// resend of unacknowledged input (idempotent via `client_msg_id` and the
+/// per-instance id sent in `hello`). Platform-neutral: the browser supplies
+/// a [TransportFactory], a [KeyValueStore] and calls [notifyOnline] /
+/// [notifyVisible] from window events.
 final class Connection {
   /// Creates the engine for [terminal].
   Connection({
     required this.terminal,
     required String wsUrl,
-    Storage storage = const Storage(),
+    required TransportFactory transportFactory,
+    required String clientId,
+    KeyValueStore? store,
+    Backoff? backoff,
+    Duration heartbeat = Limits.heartbeat,
+    Duration deadAfter = Limits.deadAfter,
+    Random? random,
   }) : _wsUrl = wsUrl,
-       _storage = storage;
+       _factory = transportFactory,
+       _clientId = clientId,
+       _store = store ?? MemoryStore(),
+       _backoff = backoff ?? Backoff(),
+       _heartbeat = heartbeat,
+       _deadAfter = deadAfter,
+       _instance = _randomId(random ?? Random.secure());
 
   static const String _sessionKey = 'tp.session';
-  static const Duration _reconnectDelay = Duration(seconds: 2);
 
   /// The terminal view.
   final TerminalSink terminal;
 
   final String _wsUrl;
-  final Storage _storage;
+  final TransportFactory _factory;
+  final String _clientId;
+  final KeyValueStore _store;
+  final Backoff _backoff;
+  final Duration _heartbeat;
+  final Duration _deadAfter;
+  final String _instance;
   final StreamController<ConnState> _states =
       StreamController<ConnState>.broadcast();
   final StreamController<int> _rtt = StreamController<int>.broadcast();
 
-  WsClientTransport? _transport;
+  /// Input sent but not yet confirmed with `ack_in`, in send order.
+  final Map<int, Uint8List> _unackedInput = {};
+
+  ClientTransport? _transport;
   ConnState _state = const Disconnected('not started');
   SessionId? _session;
   String _sessionName = '';
   int? _lastSeq;
   int _nextMsgId = 1;
-  int _unackedBytes = 0;
+  int _unackedOutputBytes = 0;
+  int _attempt = 0;
+  DateTime _lastTraffic = DateTime.now();
   Timer? _ackTimer;
   Timer? _pingTimer;
   Timer? _reconnectTimer;
@@ -104,6 +143,18 @@ final class Connection {
   /// Host part of the agent URL, for display.
   String get host => Uri.parse(_wsUrl).host;
 
+  /// Name of the attached session, for display.
+  String get sessionName => _sessionName;
+
+  /// Random id of this client instance, sent in `hello`.
+  String get instanceId => _instance;
+
+  /// Highest output sequence number received, for tests and diagnostics.
+  int? get lastSeq => _lastSeq;
+
+  /// Number of input frames awaiting `ack_in`.
+  int get pendingInput => _unackedInput.length;
+
   /// Starts connecting; reconnects automatically until [stop].
   void start() {
     _session = _storedSession();
@@ -115,8 +166,15 @@ final class Connection {
     _stopped = true;
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
+    _ackTimer?.cancel();
     _transport?.close();
   }
+
+  /// Browser came back online: retry immediately.
+  void notifyOnline() => _retryNow();
+
+  /// Tab became visible: retry immediately if disconnected.
+  void notifyVisible() => _retryNow();
 
   /// Ends the current session and starts a new one.
   void newSession() {
@@ -127,11 +185,16 @@ final class Connection {
     _transport?.close();
   }
 
-  /// Sends keyboard input (already UTF-8 bytes) to the attached session.
+  /// Sends keyboard input (UTF-8 bytes) to the attached session. Input is
+  /// kept until acknowledged and resent after a reconnect.
   void sendInput(Uint8List data) {
     final session = _session;
-    if (session == null || _state is! Live) return;
-    _transport?.sendBinary(encodeInputFrame(session, _nextMsgId++, data));
+    if (session == null) return;
+    final id = _nextMsgId++;
+    _unackedInput[id] = data;
+    if (_state is Live) {
+      _transport?.sendBinary(encodeInputFrame(session, id, data));
+    }
   }
 
   /// Sends a terminal resize.
@@ -150,43 +213,81 @@ final class Connection {
 
   void _connect() {
     if (_stopped) return;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _setState(const Connecting());
-    final transport = WsClientTransport(_wsUrl);
+    final transport = _factory(_wsUrl);
     _transport = transport;
-    transport.frames.listen(_onFrame, onDone: () => _onClosed(transport));
+    _lastTraffic = DateTime.now();
+    transport.frames.listen(
+      _onFrame,
+      onDone: () => _onClosed(transport),
+      onError: (Object _) {},
+    );
     unawaited(
       transport.opened.then(
         (_) {
+          if (_transport != transport) return;
           _sendControl(
             ClientHello(
               version: protocolVersion,
-              client: clientIdentifier(),
+              client: _clientId,
               caps: const [Caps.binary, Caps.ackIn],
+              instance: _instance,
             ),
           );
+          _startHeartbeat();
         },
         onError: (Object _) {
-          // onclose follows and schedules the retry.
+          // The frames stream ends next and schedules the retry.
         },
       ),
     );
   }
 
-  void _onClosed(WsClientTransport transport) {
+  void _onClosed(ClientTransport transport) {
     if (_transport != transport) return;
     _transport = null;
     _pingTimer?.cancel();
     _ackTimer?.cancel();
+    _ackTimer = null;
     if (_stopped) {
       _setState(const Disconnected('stopped'));
       return;
     }
-    final delay = _wantNewSession ? Duration.zero : _reconnectDelay;
-    _setState(Disconnected('connection lost', retryIn: delay));
+    final wasLive = _state is Live;
+    if (wasLive) _attempt = 0;
+    final delay = _wantNewSession ? Duration.zero : _backoff.delay(_attempt);
+    _setState(
+      Disconnected(
+        wasLive ? 'connection lost' : 'cannot reach agent',
+        retryIn: delay,
+        attempt: _attempt,
+      ),
+    );
+    _attempt++;
     _reconnectTimer = Timer(delay, _connect);
   }
 
+  void _retryNow() {
+    if (_stopped || _transport != null || _state is! Disconnected) return;
+    _connect();
+  }
+
+  void _startHeartbeat() {
+    _pingTimer?.cancel();
+    _pingTimer = Timer.periodic(_heartbeat, (_) {
+      if (DateTime.now().difference(_lastTraffic) > _deadAfter) {
+        // Silent socket: treat as dead so the backoff path reconnects.
+        _transport?.close();
+        return;
+      }
+      _sendControl(Ping(DateTime.now().millisecondsSinceEpoch));
+    });
+  }
+
   void _onFrame(ServerFrame frame) {
+    _lastTraffic = DateTime.now();
     try {
       switch (frame) {
         case TextServerFrame(:final text):
@@ -204,17 +305,26 @@ final class Connection {
       case ServerHello():
         _attach();
       case Attached(:final session, :final name, :final truncated):
+        final resumed = session == _session && _lastSeq != null;
         _session = session;
         _sessionName = name;
-        _storage.write(_sessionKey, session.toString());
-        if (_lastSeq == null) terminal.clearAll();
+        _store.write(_sessionKey, session.toString());
+        if (!resumed) {
+          _lastSeq = null;
+          _unackedOutputBytes = 0;
+          terminal.clearAll();
+        }
         if (truncated != null) {
           terminal.writeNotice(
             '${truncated.to - truncated.from} bytes of scrollback were lost',
           );
         }
+        _attempt = 0;
         _setState(Live(session: session, name: name));
-        _startPing();
+        _resendUnackedInput();
+        _sendControl(Ping(DateTime.now().millisecondsSinceEpoch)); // first RTT
+      case AckIn(:final id):
+        _unackedInput.remove(id);
       case SessionExit(:final status):
         final how = status.signal != null
             ? 'signal ${status.signal}'
@@ -224,7 +334,7 @@ final class Connection {
         );
         _forgetSession();
       case ErrorMessage(:final code, :final msg):
-        if (code == ErrorCode.sessionNotFound && _state is Connecting) {
+        if (code == ErrorCode.sessionNotFound && _state is Attaching) {
           _forgetSession();
           _attach();
           return;
@@ -235,27 +345,25 @@ final class Connection {
         _rtt.add(DateTime.now().millisecondsSinceEpoch - ts);
       case Notice(:final msg):
         terminal.writeNotice(msg);
-      case AckIn():
       case SessionsMessage():
         break;
     }
   }
 
   void _onBinary(BinaryMessage message) {
-    if (message is! OutputFrame) return;
-    if (message.session != _session) return;
+    if (message is! OutputFrame || message.session != _session) return;
     final expected = _lastSeq;
+    var data = message.data;
     if (expected != null && message.seq < expected) {
       // Overlap after a resume: drop the bytes we already have.
       final skip = expected - message.seq;
-      if (skip >= message.data.length) return;
-      terminal.writeOutput(Uint8List.sublistView(message.data, skip));
-    } else {
-      terminal.writeOutput(message.data);
+      if (skip >= data.length) return;
+      data = Uint8List.sublistView(data, skip);
     }
+    terminal.writeOutput(data);
     _lastSeq = message.seq + message.data.length;
-    _unackedBytes += message.data.length;
-    if (_unackedBytes >= Limits.ackEveryBytes) {
+    _unackedOutputBytes += data.length;
+    if (_unackedOutputBytes >= Limits.ackEveryBytes) {
       _sendAck();
     } else {
       _ackTimer ??= Timer(Limits.ackInterval, _sendAck);
@@ -266,6 +374,7 @@ final class Connection {
     final (cols, rows) = terminal.size;
     final session = _wantNewSession ? null : _session;
     _wantNewSession = false;
+    _setState(const Attaching());
     _sendControl(
       Attach(
         session: session,
@@ -276,34 +385,36 @@ final class Connection {
     );
   }
 
+  void _resendUnackedInput() {
+    final session = _session;
+    final transport = _transport;
+    if (session == null || transport == null) return;
+    for (final entry in _unackedInput.entries) {
+      transport.sendBinary(encodeInputFrame(session, entry.key, entry.value));
+    }
+  }
+
   void _sendAck() {
     _ackTimer?.cancel();
     _ackTimer = null;
     final session = _session;
     final seq = _lastSeq;
     if (session == null || seq == null) return;
-    _unackedBytes = 0;
+    _unackedOutputBytes = 0;
     _sendControl(Ack(session: session, seq: seq));
-  }
-
-  void _startPing() {
-    _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(Limits.heartbeat, (_) {
-      _sendControl(Ping(DateTime.now().millisecondsSinceEpoch));
-    });
-    _sendControl(Ping(DateTime.now().millisecondsSinceEpoch));
   }
 
   void _forgetSession() {
     _session = null;
     _sessionName = '';
     _lastSeq = null;
-    _unackedBytes = 0;
-    _storage.remove(_sessionKey);
+    _unackedOutputBytes = 0;
+    _unackedInput.clear();
+    _store.remove(_sessionKey);
   }
 
   SessionId? _storedSession() {
-    final text = _storage.read(_sessionKey);
+    final text = _store.read(_sessionKey);
     return text == null ? null : SessionId.tryParse(text);
   }
 
@@ -315,9 +426,16 @@ final class Connection {
     _states.add(state);
   }
 
-  /// Name of the attached session, for display.
-  String get sessionName => _sessionName;
-
   /// Encodes [text] for [sendInput].
   static Uint8List encodeInput(String text) => utf8.encode(text);
+
+  static String _randomId(Random random) {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    return String.fromCharCodes(
+      List.generate(
+        16,
+        (_) => alphabet.codeUnitAt(random.nextInt(alphabet.length)),
+      ),
+    );
+  }
 }
