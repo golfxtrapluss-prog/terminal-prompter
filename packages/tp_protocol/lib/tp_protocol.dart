@@ -8,6 +8,7 @@ library;
 export 'src/backoff.dart';
 export 'src/codec.dart';
 export 'src/input_dedupe.dart';
+export 'src/keys.dart';
 export 'src/limits.dart';
 export 'src/messages.dart';
 export 'src/protocol_version.dart';

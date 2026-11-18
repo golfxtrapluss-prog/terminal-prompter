@@ -112,6 +112,9 @@ final class Connection {
   final StreamController<ConnState> _states =
       StreamController<ConnState>.broadcast();
   final StreamController<int> _rtt = StreamController<int>.broadcast();
+  final StreamController<int> _acks = StreamController<int>.broadcast();
+  final StreamController<Uint8List> _output =
+      StreamController<Uint8List>.broadcast();
 
   /// Input sent but not yet confirmed with `ack_in`, in send order.
   final Map<int, Uint8List> _unackedInput = {};
@@ -139,6 +142,15 @@ final class Connection {
 
   /// Measured round-trip times in milliseconds.
   Stream<int> get rtt => _rtt.stream;
+
+  /// `client_msg_id`s confirmed by the agent (`ack_in`).
+  Stream<int> get acks => _acks.stream;
+
+  /// Output bytes as written to the terminal (for mode tracking).
+  Stream<Uint8List> get output => _output.stream;
+
+  /// True while attached to a session.
+  bool get isLive => _state is Live;
 
   /// Host part of the agent URL, for display.
   String get host => Uri.parse(_wsUrl).host;
@@ -186,15 +198,17 @@ final class Connection {
   }
 
   /// Sends keyboard input (UTF-8 bytes) to the attached session. Input is
-  /// kept until acknowledged and resent after a reconnect.
-  void sendInput(Uint8List data) {
+  /// kept until acknowledged and resent after a reconnect. Returns the
+  /// `client_msg_id`, or null when there is no session to send to.
+  int? sendInput(Uint8List data) {
     final session = _session;
-    if (session == null) return;
+    if (session == null) return null;
     final id = _nextMsgId++;
     _unackedInput[id] = data;
     if (_state is Live) {
       _transport?.sendBinary(encodeInputFrame(session, id, data));
     }
+    return id;
   }
 
   /// Sends a terminal resize.
@@ -325,6 +339,7 @@ final class Connection {
         _sendControl(Ping(DateTime.now().millisecondsSinceEpoch)); // first RTT
       case AckIn(:final id):
         _unackedInput.remove(id);
+        _acks.add(id);
       case SessionExit(:final status):
         final how = status.signal != null
             ? 'signal ${status.signal}'
@@ -361,6 +376,7 @@ final class Connection {
       data = Uint8List.sublistView(data, skip);
     }
     terminal.writeOutput(data);
+    _output.add(data);
     _lastSeq = message.seq + message.data.length;
     _unackedOutputBytes += data.length;
     if (_unackedOutputBytes >= Limits.ackEveryBytes) {

@@ -42,6 +42,24 @@ extension type ResizeEvent._(JSObject _) implements JSObject {
 extension type TerminalBuffer._(JSObject _) implements JSObject {
   /// `'normal'` or `'alternate'`.
   external String get type;
+
+  /// First visible line.
+  external int get viewportY;
+
+  /// Line of the bottom of the scrollback.
+  external int get baseY;
+}
+
+/// `terminal.modes`.
+extension type TerminalModes._(JSObject _) implements JSObject {
+  external bool get applicationCursorKeysMode;
+  external bool get bracketedPasteMode;
+}
+
+/// Mutable option view returned by `terminal.options`.
+extension type TerminalOptionsView._(JSObject _) implements JSObject {
+  external set fontSize(int value);
+  external int get fontSize;
 }
 
 /// `terminal.buffer`.
@@ -71,9 +89,19 @@ extension type Terminal._(JSObject _) implements JSObject {
   external int get rows;
   external TerminalBufferNamespace get buffer;
   external TerminalUnicode get unicode;
+  external TerminalModes get modes;
+  external TerminalOptionsView get options;
   external JSObject onData(JSFunction listener);
   external JSObject onBinary(JSFunction listener);
   external JSObject onResize(JSFunction listener);
+  external JSObject onScroll(JSFunction listener);
+  external JSObject onSelectionChange(JSFunction listener);
+  external void scrollPages(int pages);
+  external void scrollToBottom();
+  external bool hasSelection();
+  external String getSelection();
+  external void clearSelection();
+  external web.HTMLElement? get textarea;
 }
 
 /// `@xterm/addon-fit`.

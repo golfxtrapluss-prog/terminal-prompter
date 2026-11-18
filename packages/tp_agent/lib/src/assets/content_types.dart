@@ -5,6 +5,7 @@ const Map<String, String> contentTypesByExtension = {
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
   '.map': 'application/json',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',

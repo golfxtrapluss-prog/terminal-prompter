@@ -31,8 +31,9 @@ format:
 web:
 > cd $(WEB) && $(DART) compile js -O2 --no-source-maps -DTP_VERSION=$(VERSION) -o build/main.dart.js web/main.dart
 > rm -rf $(WEB_BUILD) && mkdir -p $(WEB_BUILD)
-> cp $(WEB)/web/index.html $(WEB)/web/styles.css $(WEB)/build/main.dart.js $(WEB_BUILD)/
-> if [ -d $(WEB)/web/vendor ]; then cp -r $(WEB)/web/vendor $(WEB_BUILD)/; fi
+> cp $(WEB)/web/index.html $(WEB)/web/styles.css $(WEB)/web/manifest.webmanifest $(WEB)/build/main.dart.js $(WEB_BUILD)/
+> sed 's/__TP_VERSION__/$(VERSION)/' $(WEB)/web/sw.js > $(WEB_BUILD)/sw.js
+> cp -r $(WEB)/web/vendor $(WEB)/web/icons $(WEB_BUILD)/
 
 embed: web gen-assets
 
