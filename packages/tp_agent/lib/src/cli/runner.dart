@@ -4,6 +4,8 @@ import '../auth/password.dart';
 import 'auth_commands.dart';
 import 'console.dart';
 import 'run_command.dart';
+import 'uninstall_command.dart';
+import 'update_commands.dart';
 import 'version_command.dart';
 
 /// Builds the `tp-agent` command-line interface.
@@ -27,5 +29,8 @@ CommandRunner<int> buildRunner({
     ..addCommand(
       PasswdCommand(out: out, err: err, console: console, cost: cost),
     )
-    ..addCommand(TotpCommand(out: out, err: err, console: console));
+    ..addCommand(TotpCommand(out: out, err: err, console: console))
+    ..addCommand(SelfUpdateCommand(out: out, err: err))
+    ..addCommand(VerifyCommand(out: out, err: err))
+    ..addCommand(UninstallCommand(out: out, err: err, console: console));
 }

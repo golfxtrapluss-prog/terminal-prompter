@@ -1,15 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:logging/logging.dart';
 import 'package:tp_protocol/tp_protocol.dart';
 
 import '../audit/audit_log.dart';
 import '../auth/auth_service.dart';
+import '../auth/encoding.dart';
 import '../auth/login_sessions.dart';
 import '../config/config.dart';
+import '../files/file_service.dart';
 import '../session/session_manager.dart';
 import '../transport/client_connection.dart';
+import '../transport/sse_transport.dart';
+import '../transport/transport.dart';
 import '../transport/ws_transport.dart';
 import 'api.dart';
 import 'security_headers.dart';
@@ -43,6 +49,8 @@ final class AgentServer {
         sessions: sessions,
         guard: guard,
         agentVersion: agentVersion,
+        files: _fileService(config),
+        audit: this.audit,
       );
       // Close the WebSockets of a login the moment it ends.
       a.sessions.onEnded = (login) {
@@ -85,6 +93,7 @@ final class AgentServer {
   HttpServer? _server;
   final Map<ClientConnection, Future<void>> _connections = {};
   final Map<ClientConnection, String> _loginOf = {};
+  final Map<String, SseTransport> _sse = {};
   Timer? _sweeper;
 
   /// Port actually bound (differs from the configured one only for port 0).
@@ -167,6 +176,14 @@ final class AgentServer {
       }
       if (path.startsWith('api/')) {
         response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+        if (path == 'api/sse' && request.method == 'GET') {
+          await _openSse(request);
+          return;
+        }
+        if (path == 'api/sse/send' && request.method == 'POST') {
+          await _sseSend(request);
+          return;
+        }
         if (path == 'api/ws') {
           if (!WebSocketTransformer.isUpgradeRequest(request)) {
             await _status(
@@ -246,9 +263,17 @@ final class AgentServer {
     final peer = info == null
         ? 'unknown'
         : '${info.remoteAddress.address}:${info.remotePort}';
+    _startConnection(WsTransport(socket, peer: peer), request, login);
+  }
+
+  void _startConnection(
+    Transport transport,
+    HttpRequest request,
+    LoginSession? login,
+  ) {
     final ip = guard.clientIp(request);
     final connection = ClientConnection(
-      transport: WsTransport(socket, peer: peer),
+      transport: transport,
       sessions: sessions,
       agentVersion: agentVersion,
       host: Platform.localHostname,
@@ -257,7 +282,7 @@ final class AgentServer {
       logInput: config.audit.logInput,
       // Keep the login's idle timer fresh while the terminal is in use, and
       // drop the connection if the login has meanwhile expired.
-      onActivity: login == null ? null : () => _stillValid(login!),
+      onActivity: login == null ? null : () => _stillValid(login),
     );
     final future = connection.run();
     _connections[connection] = future;
@@ -268,6 +293,134 @@ final class AgentServer {
         _loginOf.remove(connection);
       }),
     );
+  }
+
+  /// Checks login (and, for posts, Origin + CSRF) for the SSE endpoints.
+  /// Returns the login, or null after answering with an error.
+  Future<(bool, LoginSession?)> _sseAuth(
+    HttpRequest request, {
+    required bool post,
+  }) async {
+    final a = api;
+    if (a == null) return (true, null);
+    if (post && guard.allowedOrigin(request) == null) {
+      await _status(request.response, HttpStatus.forbidden, 'bad origin');
+      return (false, null);
+    }
+    final login = a.currentLogin(request);
+    if (login == null) {
+      await _status(request.response, HttpStatus.unauthorized, 'auth required');
+      return (false, null);
+    }
+    if (post) {
+      final csrf = request.headers.value(csrfHeader);
+      if (csrf == null || !constantTimeEqualsString(csrf, login.csrf)) {
+        await _status(request.response, HttpStatus.forbidden, 'bad csrf');
+        return (false, null);
+      }
+    }
+    return (true, login);
+  }
+
+  /// `GET /api/sse`: opens an event stream and runs a [ClientConnection]
+  /// over it.
+  Future<void> _openSse(HttpRequest request) async {
+    if (!config.transport.sseFallback) {
+      await _notFound(request.response);
+      return;
+    }
+    final (ok, login) = await _sseAuth(request, post: false);
+    if (!ok) return;
+    if (login != null &&
+        _loginOf.values.where((h) => h == login.tokenHash).length >=
+            Limits.maxWebSocketsPerLogin) {
+      await _status(
+        request.response,
+        HttpStatus.tooManyRequests,
+        'too many connections',
+      );
+      return;
+    }
+    final info = request.connectionInfo;
+    final transport = SseTransport(
+      request.response,
+      id: b64Url(randomBytes(16)),
+      peer: info == null
+          ? 'unknown'
+          : '${info.remoteAddress.address}:${info.remotePort}',
+      heartbeat: config.transport.heartbeat,
+      loginHash: login?.tokenHash,
+    );
+    _sse[transport.id] = transport;
+    unawaited(transport.done.whenComplete(() => _sse.remove(transport.id)));
+    transport.start();
+    _startConnection(transport, request, login);
+  }
+
+  /// `POST /api/sse/send?stream=<id>`: a JSON array of client messages.
+  Future<void> _sseSend(HttpRequest request) async {
+    final (ok, login) = await _sseAuth(request, post: true);
+    if (!ok) return;
+    final ct = request.headers.contentType;
+    if (ct == null || ct.mimeType != 'application/json') {
+      await _status(
+        request.response,
+        HttpStatus.unsupportedMediaType,
+        'json required',
+      );
+      return;
+    }
+    final stream = _sse[request.uri.queryParameters['stream'] ?? ''];
+    if (stream == null || stream.loginHash != login?.tokenHash) {
+      await _status(request.response, HttpStatus.notFound, 'unknown stream');
+      return;
+    }
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in request) {
+      builder.add(chunk);
+      if (builder.length >
+          Limits.maxControlMessageBytes + Limits.maxInputFrameBytes * 2) {
+        await _status(
+          request.response,
+          HttpStatus.requestEntityTooLarge,
+          'too large',
+        );
+        return;
+      }
+    }
+    try {
+      final body = jsonDecode(utf8.decode(builder.takeBytes()));
+      if (body is! List<Object?>) {
+        throw const FormatException('expected a JSON array');
+      }
+      stream.deliver(body);
+    } on FormatException {
+      await _status(request.response, HttpStatus.badRequest, 'bad request');
+      return;
+    } on ProtocolException catch (e) {
+      await _status(request.response, HttpStatus.badRequest, e.message);
+      return;
+    }
+    request.response.statusCode = HttpStatus.noContent;
+    await request.response.close();
+  }
+
+  /// File service, or null when disabled or the root does not exist.
+  static FileService? _fileService(AgentConfig config) {
+    if (!config.files.enabled) return null;
+    try {
+      return FileService(
+        config.files,
+        home: Platform.environment['HOME'] ?? '/',
+      );
+    } on FileError catch (e) {
+      Logger('server').warning({
+        'msg': 'files_disabled',
+        'reason': e.code,
+        'root': config.files.root,
+      });
+      return null;
+    }
   }
 
   /// True while [login] is still active; refreshes its idle timer.

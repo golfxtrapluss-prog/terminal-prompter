@@ -281,10 +281,15 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 5));
       expect(store.read('tp.session'), isNull);
       expect(terminal.notices.single, contains('session ended'));
-      conn.newSession();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      final attach = await handshake();
-      expect(attach.session, isNull);
+      conn.newSession(name: 'logs');
+      final attach = await transports.single.expectControl<Attach>();
+      expect(
+        attach.session,
+        isNull,
+        reason: 'new session on the same connection',
+      );
+      expect(attach.name, 'logs');
+      expect(transports, hasLength(1));
     },
   );
 
@@ -301,4 +306,113 @@ void main() {
       expect(terminal.replayFlags, [true, false]);
     },
   );
+
+  test(
+    'falls back to SSE after two WebSocket failures while the agent answers, and remembers it',
+    () async {
+      final sseTransports = <FakeTransport>[];
+      var failWs = true;
+      transports = [];
+      terminal = FakeTerminal();
+      store = MemoryStore();
+      states = [];
+      Connection build() => Connection(
+        terminal: terminal,
+        wsUrl: 'ws://agent.test/api/ws',
+        transportFactory: (_) {
+          final t = FakeTransport(failToOpen: failWs);
+          transports.add(t);
+          return t;
+        },
+        sseTransportFactory: () {
+          final t = FakeTransport();
+          sseTransports.add(t);
+          return t;
+        },
+        checkAuth: () async => true,
+        clientId: 'test',
+        store: store,
+        backoff: Backoff(random: Random(1), scale: 0.01),
+        random: Random(9),
+      );
+      conn = build()..states.listen(states.add);
+      conn.start();
+      for (var i = 0; i < 100 && sseTransports.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(transports, hasLength(2), reason: 'two WebSocket attempts first');
+      expect(sseTransports, hasLength(1));
+      final t = sseTransports.single;
+      final hello = await t.expectControl<ClientHello>();
+      expect(hello.version, protocolVersion);
+      t.reply(ServerHello(version: protocolVersion, agent: 'a', host: 'h'));
+      await t.expectControl<Attach>();
+      t.reply(Attached(session: sid, name: 'one', seq: 0, cols: 80, rows: 24));
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      expect((conn.state as Live).transport, 'SSE');
+      expect(store.read('tp.transport'), startsWith('sse:'));
+      conn.stop();
+
+      // A new page load goes straight to SSE while the choice is remembered.
+      failWs = false;
+      transports.clear();
+      conn = build()..start();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(transports, isEmpty);
+      expect(sseTransports, hasLength(2));
+    },
+  );
+
+  test('session list, switching and renaming', () async {
+    conn = make()..start();
+    final other = SessionId.random(Random(77));
+    final t0 = DateTime.utc(2026);
+    final lists = <List<SessionInfo>>[];
+    conn.sessionList.listen(lists.add);
+    final t = transports.single;
+    await t.expectControl<ClientHello>();
+    t.reply(
+      ServerHello(
+        version: protocolVersion,
+        agent: 'a',
+        host: 'h',
+        sessions: [
+          SessionInfo(
+            id: sid,
+            name: 'one',
+            created: t0,
+            lastSeen: t0,
+            clients: 0,
+          ),
+          SessionInfo(
+            id: other,
+            name: 'two',
+            created: t0,
+            lastSeen: t0,
+            clients: 0,
+          ),
+        ],
+      ),
+    );
+    await t.expectControl<Attach>();
+    t.reply(Attached(session: sid, name: 'one', seq: 0, cols: 80, rows: 24));
+    await t.expectControl<ListSessions>();
+    expect(conn.sessions.map((s) => s.name), ['one', 'two']);
+    expect(lists, isNotEmpty);
+
+    t.output(sid, 0, 'abc');
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    conn.switchTo(other);
+    final detach = await t.expectControl<Detach>();
+    expect(detach.session, sid);
+    final attach = await t.expectControl<Attach>();
+    expect(attach.session, other);
+    expect(attach.lastSeq, isNull, reason: 'full replay of the other session');
+    expect(store.read('tp.session'), other.toString());
+
+    conn.renameSession(other, 'renamed');
+    expect((await t.expectControl<Rename>()).name, 'renamed');
+    conn.killSession(sid);
+    expect((await t.expectControl<KillSession>()).session, sid);
+  });
 }

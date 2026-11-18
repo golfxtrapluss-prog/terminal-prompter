@@ -2,3 +2,6 @@ tags:
   netsim:
     description: Integration tests through the tp_netsim proxy (slow). Run with `make netsim`.
     timeout: 5m
+  install:
+    description: Runs install/install.sh in a sandbox (compiles the agent). Run with `make install-test`.
+    timeout: 5m

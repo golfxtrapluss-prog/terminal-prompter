@@ -1,0 +1,4 @@
+# Caddy: automatic HTTPS for the agent (docs/06). Replace the name.
+tp.example.com {
+	reverse_proxy 127.0.0.1:7681
+}

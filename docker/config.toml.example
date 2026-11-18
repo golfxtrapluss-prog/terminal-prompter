@@ -1,0 +1,11 @@
+# Agent config for the Docker image. Create the real file with:
+#   docker run --rm -it -v /etc/tp-agent:/etc/tp-agent tp-agent \
+#     init --config /etc/tp-agent/config.toml --listen 0.0.0.0:7681 \
+#     --public-origin https://tp.example.com --state-dir /var/lib/tp-agent
+# then set [shell] as below so the terminal opens on the host.
+
+[shell]
+command = "nsenter"
+args = ["-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "/bin/bash", "-l"]
+env = { TERM = "xterm-256color", LANG = "C.UTF-8" }
+workdir = "/"

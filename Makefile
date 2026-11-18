@@ -4,6 +4,10 @@
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
 DART    ?= dart
+# Release settings baked into the binary (docs/05 selfupdate). Set by CI.
+TP_RELEASE_KEY ?=
+TP_RELEASE_URL ?=
+DEFINES := -DTP_VERSION=$(VERSION) -DTP_RELEASE_KEY=$(TP_RELEASE_KEY) -DTP_RELEASE_URL=$(TP_RELEASE_URL)
 CHROME  := $(shell command -v google-chrome google-chrome-stable chromium chromium-browser 2>/dev/null | head -n1)
 
 AGENT      := packages/tp_agent
@@ -11,7 +15,7 @@ WEB        := packages/tp_web
 WEB_BUILD  := $(AGENT)/web_build
 ASSETS_OUT := lib/src/generated/assets.g.dart
 
-.PHONY: bootstrap gen-assets analyze format web embed build run test netsim clean
+.PHONY: bootstrap gen-assets analyze format web embed build run test netsim install-test release clean
 
 bootstrap:
 > $(DART) pub get
@@ -42,9 +46,9 @@ embed: web gen-assets
 
 build: embed
 > mkdir -p bin
-> cd $(AGENT) && $(DART) compile exe -DTP_VERSION=$(VERSION) \
+> cd $(AGENT) && $(DART) compile exe $(DEFINES) \
 >     --target-os linux --target-arch x64   -o ../../bin/tp-agent-linux-x64   bin/tp_agent.dart
-> cd $(AGENT) && $(DART) compile exe -DTP_VERSION=$(VERSION) \
+> cd $(AGENT) && $(DART) compile exe $(DEFINES) \
 >     --target-os linux --target-arch arm64 -o ../../bin/tp-agent-linux-arm64 bin/tp_agent.dart
 > ls -la bin/
 
@@ -53,7 +57,7 @@ run: web gen-assets
 
 test: analyze
 > cd packages/tp_protocol && $(DART) test
-> cd packages/tp_agent    && $(DART) test --exclude-tags netsim
+> cd packages/tp_agent    && $(DART) test --exclude-tags netsim,install
 > cd packages/tp_netsim   && $(DART) test
 > cd packages/tp_web      && $(DART) test
 ifneq ($(CHROME),)
@@ -63,5 +67,19 @@ endif
 netsim: gen-assets
 > cd packages/tp_agent && $(DART) test --tags netsim
 
+# install/install.sh end to end under dash and BusyBox (sandboxed, no root).
+install-test: gen-assets
+> cd packages/tp_agent && $(DART) test --tags install
+
+# Signed release in dist/: binaries, install.sh, stub.sh, SHA256SUMS(.sig).
+# Needs TP_RELEASE_KEY, TP_RELEASE_URL and the secret TP_RELEASE_SIGNING_KEY.
+release: build
+> test -n "$(TP_RELEASE_KEY)" && test -n "$(TP_RELEASE_URL)" || { echo "set TP_RELEASE_KEY and TP_RELEASE_URL"; exit 1; }
+> rm -rf dist && mkdir -p dist
+> cp bin/tp-agent-linux-x64 bin/tp-agent-linux-arm64 dist/
+> sed 's#__TP_RELEASE_URL__#$(TP_RELEASE_URL)#' install/install.sh > dist/install.sh
+> cd $(AGENT) && $(DART) run tool/sign_release.dart ../../dist $(VERSION)
+> sed -e 's#__TP_INSTALL_URL__#$(TP_RELEASE_URL)/install.sh#' -e "s#__TP_INSTALL_SHA256__#$$(sha256sum dist/install.sh | cut -d' ' -f1)#" install/stub.sh > dist/stub.sh
+
 clean:
-> rm -rf bin $(WEB_BUILD) $(WEB)/build $(AGENT)/$(ASSETS_OUT)
+> rm -rf bin dist $(WEB_BUILD) $(WEB)/build $(AGENT)/$(ASSETS_OUT)

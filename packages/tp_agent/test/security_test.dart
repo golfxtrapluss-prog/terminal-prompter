@@ -26,6 +26,8 @@ final class Harness {
 
   static Future<Harness> start({bool withTotp = false}) async {
     final dir = await Directory.systemTemp.createTemp('tp_sec_');
+    await Directory('${dir.path}/home').create();
+    await File('${dir.path}/home/readme.txt').writeAsString('0123456789');
     await File('${dir.path}/index.html').writeAsString('<title>tp</title>');
     final totp = withTotp ? Totp.generate() : null;
     final hash = hashPassword(password, cost: Argon2Cost.test);
@@ -47,6 +49,10 @@ env = { TERM = "xterm-256color", PS1 = "TP\$ ", LANG = "C.UTF-8" }
 
 [transport]
 output_coalesce = "5ms"
+
+[files]
+root = "${dir.path}/home"
+chunk_size = "64KB"
 
 [audit]
 path = "${dir.path}/audit.jsonl"
@@ -611,5 +617,168 @@ void main() {
       );
     }
     expect(auditText, contains('login_ok'));
+  });
+
+  group('files over HTTP', () {
+    late Harness h;
+    setUp(() async => h = await Harness.start());
+    tearDown(() => h.stop());
+
+    Future<HttpClientResponse> raw(
+      String method,
+      String path, {
+      Cookies? c,
+      Map<String, String> headers = const {},
+      List<int>? body,
+      bool csrf = true,
+    }) async {
+      final req = await h.http.openUrl(method, h.url(path));
+      req.headers
+        ..set(HttpHeaders.userAgentHeader, ua)
+        ..set('origin', h.origin);
+      if (c != null) {
+        req.cookies.add(Cookie('tp_session', c.session));
+        if (csrf) req.headers.set('x-tp-csrf', c.csrf);
+      }
+      headers.forEach(req.headers.set);
+      if (body != null) req.add(body);
+      return req.close();
+    }
+
+    test(
+      'needs a login; ../../etc/shadow is 400 (docs/11 scenario 7)',
+      () async {
+        expect((await h.request('GET', 'api/files/list')).status, 401);
+        final c = await h.login();
+        final traversal = await h.request(
+          'GET',
+          'api/files/download?path=../../etc/shadow',
+          cookies: c,
+        );
+        expect(traversal.status, 400);
+        expect(traversal.map['error'], 'outside_root');
+        expect(
+          (await h.request(
+            'GET',
+            'api/files/list?path=%2Fetc',
+            cookies: c,
+          )).status,
+          400,
+        );
+        final list = await h.request('GET', 'api/files/list', cookies: c);
+        expect(list.status, 200);
+        expect(
+          ((list.map['entries']! as List).single as Map)['name'],
+          'readme.txt',
+        );
+      },
+    );
+
+    test('download supports Range and is audited', () async {
+      final c = await h.login();
+      final full = await raw('GET', 'api/files/download?path=readme.txt', c: c);
+      expect(full.statusCode, 200);
+      expect(full.headers.value('accept-ranges'), 'bytes');
+      expect(full.headers.value('content-disposition'), contains('readme.txt'));
+      expect(await utf8.decodeStream(full), '0123456789');
+      final part = await raw(
+        'GET',
+        'api/files/download?path=readme.txt',
+        c: c,
+        headers: {'range': 'bytes=4-'},
+      );
+      expect(part.statusCode, 206);
+      expect(part.headers.value('content-range'), 'bytes 4-9/10');
+      expect(await utf8.decodeStream(part), '456789');
+      final bad = await raw(
+        'GET',
+        'api/files/download?path=readme.txt',
+        c: c,
+        headers: {'range': 'bytes=50-'},
+      );
+      expect(bad.statusCode, 416);
+      await bad.drain<void>();
+      expect(h.auditEvents().where((e) => e['ev'] == 'download'), hasLength(1));
+    });
+
+    test(
+      'resumable upload: start, chunk, HEAD offset, finish; CSRF required',
+      () async {
+        final c = await h.login();
+        final data = List<int>.generate(100000, (i) => i % 256);
+        expect(
+          (await h.request(
+            'POST',
+            'api/files/upload',
+            json: {'name': 'x.bin', 'size': data.length},
+            cookies: c,
+            csrf: false,
+          )).status,
+          403,
+        );
+        final start = await h.request(
+          'POST',
+          'api/files/upload',
+          json: {'name': 'x.bin', 'size': data.length},
+          cookies: c,
+        );
+        expect(start.status, 200);
+        final id = start.map['id']! as String;
+
+        var r = await raw(
+          'POST',
+          'api/files/upload/$id',
+          c: c,
+          headers: {
+            'upload-offset': '0',
+            'content-type': 'application/octet-stream',
+          },
+          body: data.sublist(0, 65536),
+        );
+        expect(r.statusCode, 200);
+        expect(r.headers.value('upload-offset'), '65536');
+        await r.drain<void>();
+        r = await raw(
+          'POST',
+          'api/files/upload/$id',
+          c: c,
+          headers: {'upload-offset': '0'},
+          body: [1, 2, 3],
+        );
+        expect(r.statusCode, 409, reason: 'wrong offset');
+        expect(r.headers.value('upload-offset'), '65536');
+        await r.drain<void>();
+        r = await raw(
+          'POST',
+          'api/files/upload/$id',
+          c: c,
+          headers: {'upload-offset': '65536'},
+          body: data.sublist(65536),
+          csrf: false,
+        );
+        expect(r.statusCode, 403, reason: 'chunk needs CSRF too');
+        await r.drain<void>();
+        final head = await raw('HEAD', 'api/files/upload/$id', c: c);
+        expect(head.headers.value('upload-offset'), '65536');
+        await head.drain<void>();
+        r = await raw(
+          'POST',
+          'api/files/upload/$id',
+          c: c,
+          headers: {'upload-offset': '65536'},
+          body: data.sublist(65536),
+        );
+        expect(r.statusCode, 200);
+        expect(jsonDecode(await utf8.decodeStream(r)), {
+          'offset': data.length,
+          'done': true,
+        });
+        expect(File('${h.dir.path}/home/x.bin').readAsBytesSync(), data);
+        expect(
+          h.auditEvents().where((e) => e['ev'] == 'upload').single['bytes'],
+          data.length,
+        );
+      },
+    );
   });
 }

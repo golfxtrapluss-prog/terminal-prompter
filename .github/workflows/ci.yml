@@ -28,6 +28,7 @@ jobs:
           sdk: 3.14.0
       - run: make bootstrap
       - run: make netsim
+      - run: make install-test
 
   build:
     name: Build binaries (x64 + arm64)

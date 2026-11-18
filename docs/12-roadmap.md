@@ -46,6 +46,7 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 - Sesjonsliste, nye/navngitte sesjoner, flere faner.
 - `selfupdate` med ed25519.
 - **Akseptanse:** fra blank Hetzner-VPS (Ubuntu) til innlogget terminal < 60 s; samme på server med Coolify via Traefik; netsim `hostile` grønn.
+- **Status:** 🟡 implementert 18.11.2026. Grønt: netsim `hostile` (scenario 5, SSE gjennom blokkert WebSocket og idle-kutt), filoverføring med gjenopptak og Range (også i nettleser, 700 KB byte-for-byte), path traversal → 400, flere/navngitte sesjoner i nettleser, `selfupdate` mot lokal signert release (feil signatur, manipulert `SHA256SUMS`, byttet binær og manglende nøkkel avvises), `install.sh` ende-til-ende i sandkasse under dash og BusyBox, `uninstall`. **Ikke verifisert:** installasjon på blank Hetzner-VPS og på Coolify (krever ekte server), Docker-imaget (Docker mangler lokalt), `release.yml` (repoet er ikke på GitHub ennå), Caddy-installasjon og OpenRC-tjeneste på ekte maskiner.
 
 ## M6.5 – Bootstrap-side og keymap-kompensator (2 dager)
 - `tp_protocol/keymap`, innebygde layouter (no, se, dk, de, fr, uk, us), kalibreringsflyt, `loadkeys`-forslag, tegnsikker kommando, invers encoder.

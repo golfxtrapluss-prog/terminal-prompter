@@ -92,3 +92,13 @@ Format: Kontekst → Beslutning → Konsekvenser. Nye beslutninger legges til ne
 - **Beslutning:** Egen tilstandsfil `[auth] state_file` (JSON, 0600, atomisk skriving). Passordlisten genereres fra SecLists `10k-most-common.txt` + `100k-most-used-passwords-NCSC.txt`, filtrert til ≥ 12 tegn, til `lib/src/auth/common_passwords.g.dart` (oppdateres med et engangsskript ved behov). QR-koder lages av en egen koder (`lib/src/cli/qr.dart`, byte-modus, nivå M, versjon 1–10), verifisert modul for modul mot `segno` og `qrcode` (Python) i `test/qr_test.dart`.
 - **Konsekvenser:** Én fil til å sikkerhetskopiere. Passordsjekken stopper ~1 200 vanlige lange passord. Ingen nye pub-avhengigheter.
 
+## ADR-019: SSE bærer samme meldinger som WebSocket
+- **Kontekst:** Doc 04 skisserte SSE med `session`/`last_seq` i URL og `Last-Event-ID`. Det ville gitt to protokoller å vedlikeholde.
+- **Beslutning:** SSE er bare en annen `Transport`: strømmen sender de samme kontrollmeldingene og output-rammene (base64 i JSON), og klienten sender sine meldinger som JSON-lister med POST. En tilfeldig strøm-ID, bundet til innloggingen, kobler POST til riktig strøm. All protokollkode (hello, attach, gjenopptak, idempotens, flytkontroll) deles.
+- **Konsekvenser:** Én implementasjon av protokollen. Litt mer overhead per POST enn per WebSocket-ramme, men POST-er samles per hendelsesløkke-runde.
+
+## ADR-020: Signerte releaser og innbakt nøkkel
+- **Kontekst:** `selfupdate` må kunne stole på nye binærer, og nøkkelen skal ikke ligge i repoet.
+- **Beslutning:** `SHA256SUMS` (med `# version`) signeres med ed25519 (`package:cryptography`) i CI med hemmeligheten `TP_RELEASE_SIGNING_KEY`. Offentlig nøkkel og release-URL bakes inn ved bygging (`-DTP_RELEASE_KEY`, `-DTP_RELEASE_URL`); en binær uten nøkkel nekter `selfupdate`. Oppdatering verifiserer signaturen før noen hash brukes, sjekker SHA-256, og bytter binæren med `rename`. `install.sh` sjekker bare SHA-256 over HTTPS, fordi en binær ikke kan gå god for seg selv; `tp-agent verify` er for et allerede installert binær som sjekker en ny.
+- **Konsekvenser:** Eieren må lage nøkkelparet (`dart run tool/release_keys.dart`) og legge det i GitHub før første release.
+

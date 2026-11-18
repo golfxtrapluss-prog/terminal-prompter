@@ -8,12 +8,14 @@ import 'package:web/web.dart' as web;
 import 'api_client.dart';
 import 'client_info.dart';
 import 'conn/connection.dart';
+import 'conn/sse_transport.dart';
 import 'conn/ws_transport.dart';
 import 'i18n/strings.dart';
 import 'pwa/pwa.dart';
 import 'settings.dart';
 import 'storage.dart';
 import 'ui/dom.dart';
+import 'ui/files_panel.dart';
 import 'ui/keybar.dart';
 import 'ui/login_view.dart';
 import 'ui/prompter.dart';
@@ -42,6 +44,7 @@ final class App implements KeyBarListener {
   late final KeyBar _keyBar;
   late final SettingsPanel _settingsPanel;
   late final SecurityPanel _securityPanel;
+  late final FilesPanel _filesPanel = FilesPanel(api: _api, strings: _strings);
   late final ApiClient _api = ApiClient(_basePath());
   late final web.HTMLElement _hint;
   late final web.HTMLElement _modeButton;
@@ -120,6 +123,7 @@ final class App implements KeyBarListener {
       transportFactory: WsClientTransport.new,
       clientId: clientIdentifier(),
       store: _store,
+      sseTransportFactory: () => SseClientTransport(_basePath()),
       checkAuth: () async {
         try {
           await _api.get('me');
@@ -170,17 +174,22 @@ final class App implements KeyBarListener {
       ((web.Event e) => e.preventDefault()).toJS,
     );
     _modeButton.onclick = ((web.Event _) => toggleMode()).toJS;
-    final snippetsButton = el('button', text: '📎 ${_strings['snippets']}');
+    final filesButton = _toolButton('📁', _strings['files']);
+    filesButton.addEventListener(
+      'pointerdown',
+      ((web.Event e) => e.preventDefault()).toJS,
+    );
+    filesButton.onclick = ((web.Event _) => unawaited(_filesPanel.open())).toJS;
+    final snippetsButton = _toolButton('📎', _strings['snippets']);
     snippetsButton.addEventListener(
       'pointerdown',
       ((web.Event e) => e.preventDefault()).toJS,
     );
     snippetsButton.onclick = ((web.Event _) => _prompter.toggleSnippets()).toJS;
-    final keybarButton = el(
-      'button',
-      text: '⌨ ${_strings['keybar']}',
+    final keybarButton = _toolButton(
+      '⌨',
+      _strings['keybar'],
       title: 'Ctrl+Shift+K',
-      label: _strings['keybar'],
     );
     keybarButton.addEventListener(
       'pointerdown',
@@ -190,6 +199,7 @@ final class App implements KeyBarListener {
     _hint = el('span', className: 'hint');
     toolbar
       ..appendChild(_modeButton)
+      ..appendChild(filesButton)
       ..appendChild(snippetsButton)
       ..appendChild(keybarButton)
       ..appendChild(_hint);
@@ -203,7 +213,8 @@ final class App implements KeyBarListener {
       ..appendChild(terminalHost)
       ..appendChild(bottom)
       ..appendChild(_settingsPanel.element)
-      ..appendChild(_securityPanel.element);
+      ..appendChild(_securityPanel.element)
+      ..appendChild(_filesPanel.element);
 
     ViewportManager(_root).onChange = _terminal.fit;
     _applyKeyBarVisibility(_settings.keyBarVisibleFor(touch: _touch));
@@ -463,6 +474,21 @@ final class App implements KeyBarListener {
     _applyKeyBarScale();
     _applyKeyBarVisibility(_settings.keyBarVisibleFor(touch: _touch));
     _setMode(_mode);
+  }
+
+  /// Toolbar button: icon plus a label that collapses on narrow screens
+  /// (the label stays the accessible name).
+  web.HTMLElement _toolButton(String icon, String label, {String? title}) {
+    final b = el(
+      'button',
+      className: 'tool',
+      title: title ?? label,
+      label: label,
+    );
+    b
+      ..appendChild(el('span', text: icon))
+      ..appendChild(el('span', className: 'tool-label', text: ' $label'));
+    return b;
   }
 
   /// Shows a message carried over a login reload (e.g. backup code used).

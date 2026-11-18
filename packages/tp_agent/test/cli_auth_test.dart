@@ -179,6 +179,35 @@ void main() {
     expect(text, endsWith('[audit]\nenabled = false\n'));
     expect(tomlString("it's"), '"it\'s"');
   });
+
+  test('uninstall removes files, keeps state unless purged', () async {
+    final root = dir.path;
+    for (final f in [
+      '/usr/local/bin/tp-agent',
+      '/etc/tp-agent/config.toml',
+      '/etc/systemd/system/tp-agent.service',
+      '/etc/sudoers.d/tp-agent',
+      '/var/lib/tp-agent/audit.jsonl',
+    ]) {
+      File('$root$f')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('x');
+    }
+    expect(await run(['uninstall', '--root', root], ['n']), 0);
+    expect(
+      File('$root/usr/local/bin/tp-agent').existsSync(),
+      isTrue,
+      reason: 'answered no',
+    );
+    expect(await run(['uninstall', '--root', root, '--yes']), 0);
+    expect(Directory('$root/etc/tp-agent').existsSync(), isFalse);
+    expect(File('$root/usr/local/bin/tp-agent').existsSync(), isFalse);
+    expect(File('$root/etc/sudoers.d/tp-agent').existsSync(), isFalse);
+    expect(File('$root/var/lib/tp-agent/audit.jsonl').existsSync(), isTrue);
+    expect(out.toString(), contains('kept /var/lib/tp-agent'));
+    expect(await run(['uninstall', '--root', root, '--yes', '--purge']), 0);
+    expect(Directory('$root/var/lib/tp-agent').existsSync(), isFalse);
+  });
 }
 
 /// Answers the TOTP prompt with the current code for the key it printed.

@@ -51,7 +51,14 @@ final class Attaching extends ConnState {
 
 /// Attached to a session and exchanging data.
 final class Live extends ConnState {
-  const Live({required this.session, required this.name});
+  const Live({
+    required this.session,
+    required this.name,
+    this.transport = 'WS',
+  });
+
+  /// `WS` or `SSE`.
+  final String transport;
 
   /// Attached session.
   final SessionId session;
@@ -97,6 +104,7 @@ final class Connection {
     Duration deadAfter = Limits.deadAfter,
     Random? random,
     this.checkAuth,
+    this.sseTransportFactory,
   }) : _wsUrl = wsUrl,
        _factory = transportFactory,
        _clientId = clientId,
@@ -117,6 +125,20 @@ final class Connection {
   /// connection fails to open or is closed with code 4401.
   final Future<bool> Function()? checkAuth;
 
+  /// Creates the SSE fallback transport; null disables the fallback.
+  final ClientTransport Function()? sseTransportFactory;
+
+  /// docs/03: after this many WebSocket failures in a row while the agent
+  /// answers `/api/me`, switch to SSE and remember it for [sseMemory].
+  static const int wsFailuresBeforeSse = 2;
+  static const Duration sseMemory = Duration(hours: 24);
+  static const String _transportKey = 'tp.transport';
+  int _wsFailures = 0;
+  bool _usingSse = false;
+
+  /// `WS` or `SSE`.
+  String get transportName => _usingSse ? 'SSE' : 'WS';
+
   final String _wsUrl;
   final TransportFactory _factory;
   final String _clientId;
@@ -129,6 +151,10 @@ final class Connection {
       StreamController<ConnState>.broadcast();
   final StreamController<int> _rtt = StreamController<int>.broadcast();
   final StreamController<int> _acks = StreamController<int>.broadcast();
+  final StreamController<List<SessionInfo>> _sessionList =
+      StreamController<List<SessionInfo>>.broadcast();
+  List<SessionInfo> _sessions = const [];
+  String? _newSessionName;
   final StreamController<Uint8List> _output =
       StreamController<Uint8List>.broadcast();
 
@@ -189,6 +215,7 @@ final class Connection {
   /// Starts connecting; reconnects automatically until [stop].
   void start() {
     _session = _storedSession();
+    _usingSse = sseTransportFactory != null && _sseRemembered();
     _connect();
   }
 
@@ -208,12 +235,54 @@ final class Connection {
   void notifyVisible() => _retryNow();
 
   /// Ends the current session and starts a new one.
-  void newSession() {
-    final session = _session;
-    if (session != null) _sendControl(KillSession(session));
+  void newSession({String? name}) {
+    _newSessionName = name;
+    if (_state is Live) {
+      _leaveCurrent();
+      _wantNewSession = true;
+      _attach();
+      return;
+    }
     _forgetSession();
     _wantNewSession = true;
-    _transport?.close();
+  }
+
+  /// Switches the view to another existing session (the current one keeps
+  /// running on the agent).
+  void switchTo(SessionId id) {
+    if (id == _session) return;
+    _leaveCurrent();
+    _session = id;
+    _store.write(_sessionKey, id.toString());
+    if (_state is Live) _attach();
+  }
+
+  /// Ends a session on the agent.
+  void killSession(SessionId id) => _sendControl(KillSession(id));
+
+  /// Renames a session.
+  void renameSession(SessionId id, String name) =>
+      _sendControl(Rename(session: id, name: name));
+
+  /// Asks for a fresh session list.
+  void refreshSessions() => _sendControl(const ListSessions());
+
+  /// Sessions known from the last `hello`/`sessions` message.
+  List<SessionInfo> get sessions => List.unmodifiable(_sessions);
+
+  /// Session list changes.
+  Stream<List<SessionInfo>> get sessionList => _sessionList.stream;
+
+  /// Attached session id.
+  SessionId? get currentSession => _session;
+
+  void _leaveCurrent() {
+    final current = _session;
+    if (current != null && _state is Live) _sendControl(Detach(current));
+    _session = null;
+    _lastSeq = null;
+    _unackedOutputBytes = 0;
+    _unackedInput.clear();
   }
 
   /// Sends keyboard input (UTF-8 bytes) to the attached session. Input is
@@ -251,7 +320,8 @@ final class Connection {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _setState(const Connecting());
-    final transport = _factory(_wsUrl);
+    final sse = sseTransportFactory;
+    final transport = _usingSse && sse != null ? sse() : _factory(_wsUrl);
     _transport = transport;
     _lastTraffic = DateTime.now();
     transport.frames.listen(
@@ -301,6 +371,21 @@ final class Connection {
             _stopped = true;
             _setState(const AuthRequired());
             return;
+          }
+          // The agent answers but the WebSocket would not open: count it,
+          // and fall back to SSE after repeated failures (docs/03).
+          if (!wasLive && !_usingSse && sseTransportFactory != null) {
+            _wsFailures++;
+            if (_wsFailures >= wsFailuresBeforeSse) {
+              _usingSse = true;
+              _attempt = 0;
+              _store.write(
+                _transportKey,
+                'sse:${DateTime.now().add(sseMemory).millisecondsSinceEpoch}',
+              );
+              _connect();
+              return;
+            }
           }
           _scheduleRetry(wasLive: false);
         }),
@@ -357,7 +442,8 @@ final class Connection {
 
   void _onControl(ServerMessage message) {
     switch (message) {
-      case ServerHello():
+      case ServerHello(:final sessions):
+        _setSessions(sessions);
         _attach();
       case Attached(:final session, :final name, :final truncated, :final seq):
         final resumed = session == _session && _lastSeq != null;
@@ -376,7 +462,9 @@ final class Connection {
           );
         }
         _attempt = 0;
-        _setState(Live(session: session, name: name));
+        _setState(Live(session: session, name: name, transport: transportName));
+        _sendControl(const ListSessions());
+        if (!_usingSse) _wsFailures = 0;
         _resendUnackedInput();
         _sendControl(Ping(DateTime.now().millisecondsSinceEpoch)); // first RTT
       case AckIn(:final id):
@@ -402,8 +490,8 @@ final class Connection {
         _rtt.add(DateTime.now().millisecondsSinceEpoch - ts);
       case Notice(:final msg):
         terminal.writeNotice(msg);
-      case SessionsMessage():
-        break;
+      case SessionsMessage(:final sessions):
+        _setSessions(sessions);
     }
   }
 
@@ -431,11 +519,14 @@ final class Connection {
   void _attach() {
     final (cols, rows) = terminal.size;
     final session = _wantNewSession ? null : _session;
+    final name = session == null ? _newSessionName : null;
     _wantNewSession = false;
+    _newSessionName = null;
     _setState(const Attaching());
     _sendControl(
       Attach(
         session: session,
+        name: name,
         cols: cols,
         rows: rows,
         lastSeq: session == null ? null : _lastSeq,
@@ -472,6 +563,22 @@ final class Connection {
     _unackedOutputBytes = 0;
     _unackedInput.clear();
     _store.remove(_sessionKey);
+  }
+
+  void _setSessions(List<SessionInfo> list) {
+    _sessions = List.of(list);
+    _sessionList.add(_sessions);
+  }
+
+  bool _sseRemembered() {
+    final v = _store.read(_transportKey);
+    if (v == null || !v.startsWith('sse:')) return false;
+    final until = int.tryParse(v.substring(4)) ?? 0;
+    if (DateTime.now().millisecondsSinceEpoch > until) {
+      _store.remove(_transportKey);
+      return false;
+    }
+    return true;
   }
 
   SessionId? _storedSession() {

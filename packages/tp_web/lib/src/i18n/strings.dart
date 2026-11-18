@@ -111,6 +111,18 @@ final class Strings {
         'Off. Turn on with "tp-agent totp enable" on the server.',
     'security.never': 'never',
     'security.lastUsed': 'last used',
+    'files': 'Files',
+    'files.upload': 'Upload',
+    'files.home': 'Home',
+    'files.error': 'Error',
+    'files.retrying': 'connection lost, resuming…',
+    'files.overwrite': 'already exists. Replace it?',
+    'sessions.clients': 'viewing',
+    'sessions.exited': 'ended',
+    'sessions.rename': 'Rename',
+    'sessions.end': 'End',
+    'sessions.newName': 'Session name',
+    'sessions.confirmEnd': 'End session',
   });
 
   static const Strings no = Strings._({
@@ -222,6 +234,18 @@ final class Strings {
     'security.totpOff': 'Av. Slå på med «tp-agent totp enable» på serveren.',
     'security.never': 'aldri',
     'security.lastUsed': 'sist brukt',
+    'files': 'Filer',
+    'files.upload': 'Last opp',
+    'files.home': 'Hjem',
+    'files.error': 'Feil',
+    'files.retrying': 'forbindelsen brøt, fortsetter…',
+    'files.overwrite': 'finnes allerede. Erstatte den?',
+    'sessions.clients': 'ser på',
+    'sessions.exited': 'avsluttet',
+    'sessions.rename': 'Gi nytt navn',
+    'sessions.end': 'Avslutt',
+    'sessions.newName': 'Navn på sesjonen',
+    'sessions.confirmEnd': 'Avslutte sesjonen',
   });
 
   final Map<String, String> _map;

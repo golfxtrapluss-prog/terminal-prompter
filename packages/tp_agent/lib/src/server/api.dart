@@ -5,11 +5,13 @@ import 'dart:typed_data';
 
 import 'package:logging/logging.dart';
 
+import '../audit/audit_log.dart';
 import '../auth/auth_service.dart';
 import '../auth/encoding.dart';
 import '../auth/login_sessions.dart';
 import '../auth/webauthn.dart';
 import '../config/config.dart';
+import '../files/file_service.dart';
 import '../session/session_manager.dart';
 
 /// Cookie names.
@@ -90,7 +92,15 @@ final class Api {
     required this.sessions,
     required this.guard,
     required this.agentVersion,
-  });
+    this.files,
+    AuditLog? audit,
+  }) : audit = audit ?? AuditLog.disabled();
+
+  /// File transfer; null when `files.enabled` is false.
+  final FileService? files;
+
+  /// Audit log for uploads and downloads.
+  final AuditLog audit;
 
   static const int maxBody = 64 * 1024;
 
@@ -115,6 +125,10 @@ final class Api {
   Future<void> handle(HttpRequest request, String path) async {
     final response = request.response;
     response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+    if (path.startsWith('files/')) {
+      await _files(request, path.substring(6));
+      return;
+    }
     try {
       final result = await _route(request, path);
       await _json(response, 200, result);
@@ -234,6 +248,186 @@ final class Api {
         return {'codes': await auth.generateBackupCodes(login)};
     }
     throw const ApiError(404, 'not_found');
+  }
+
+  // ---- files (docs/02 "Filoverføring") ----
+
+  Future<void> _files(HttpRequest request, String path) async {
+    final response = request.response;
+    try {
+      final service = files ?? (throw const ApiError(404, 'files_disabled'));
+      final login = _requireLogin(request);
+      final client = guard.client(request);
+      final method = request.method;
+      if (path == 'list' && method == 'GET') {
+        await _json(
+          response,
+          200,
+          service.list(request.uri.queryParameters['path'] ?? ''),
+        );
+        return;
+      }
+      if (path == 'download' && (method == 'GET' || method == 'HEAD')) {
+        await _download(request, service, client);
+        return;
+      }
+      // Everything else changes state: same-origin + CSRF (docs/05).
+      if (guard.allowedOrigin(request) == null) {
+        throw const ApiError(403, 'bad_origin');
+      }
+      final csrf = request.headers.value(csrfHeader);
+      if (csrf == null || !constantTimeEqualsString(csrf, login.csrf)) {
+        throw const ApiError(403, 'bad_csrf');
+      }
+      if (path == 'upload' && method == 'POST') {
+        final ct = request.headers.contentType;
+        if (ct == null || ct.mimeType != 'application/json') {
+          throw const ApiError(415, 'json_required');
+        }
+        final body = await _readJson(request);
+        final size = body['size'];
+        if (size is! int) throw const ApiError(400, 'bad_request');
+        final upload = service.startUpload(
+          dir: body['dir'] is String ? body['dir']! as String : '',
+          name: _str(body, 'name'),
+          size: size,
+          overwrite: body['overwrite'] == true,
+          owner: login.tokenHash,
+        );
+        if (upload.size == 0) {
+          await service.appendChunk(upload, 0, const Stream.empty());
+          audit.record('upload', {
+            'ip': client.ip,
+            'path': upload.target,
+            'bytes': 0,
+          });
+        }
+        await _json(response, 200, {
+          'id': upload.id,
+          'offset': upload.size == 0 ? 0 : upload.offset,
+          'target': upload.target,
+        });
+        return;
+      }
+      if (path.startsWith('upload/')) {
+        final upload = service.upload(path.substring(7), login.tokenHash);
+        if (method == 'HEAD') {
+          response.headers.set('Upload-Offset', '${upload.offset}');
+          response.statusCode = 204;
+          await response.close();
+          return;
+        }
+        if (method == 'DELETE') {
+          service.cancel(upload);
+          await _json(response, 200, {'ok': true});
+          return;
+        }
+        if (method == 'POST') {
+          final offset = int.tryParse(
+            request.headers.value('upload-offset') ?? '',
+          );
+          if (offset == null) {
+            throw const ApiError(400, 'upload_offset_required');
+          }
+          final int now;
+          try {
+            now = await service.appendChunk(upload, offset, request);
+          } on FileError catch (e) {
+            response.headers.set('Upload-Offset', '${upload.offset}');
+            throw ApiError(e.status, e.code);
+          }
+          final done = now == upload.size;
+          if (done) {
+            audit.record('upload', {
+              'ip': client.ip,
+              'path': upload.target,
+              'bytes': upload.size,
+            });
+          }
+          response.headers.set('Upload-Offset', '$now');
+          await _json(response, 200, {'offset': now, 'done': done});
+          return;
+        }
+      }
+      throw const ApiError(404, 'not_found');
+    } on ApiError catch (e) {
+      await _drain(request);
+      await _json(response, e.status, {'error': e.code});
+    } on FileError catch (e) {
+      await _drain(request);
+      await _json(response, e.status, {'error': e.code});
+    }
+  }
+
+  static Future<void> _drain(HttpRequest request) async {
+    try {
+      await request.drain<void>();
+    } on Object {
+      // Body already consumed or connection gone.
+    }
+  }
+
+  /// Download with single-range support (resumable over bad links).
+  Future<void> _download(
+    HttpRequest request,
+    FileService service,
+    ClientInfo client,
+  ) async {
+    final file = service.downloadFile(
+      request.uri.queryParameters['path'] ?? '',
+    );
+    final length = file.lengthSync();
+    final response = request.response;
+    var start = 0;
+    var end = length - 1;
+    final range = request.headers.value(HttpHeaders.rangeHeader);
+    if (range != null) {
+      final m = RegExp(r'^bytes=(\d*)-(\d*)$').firstMatch(range.trim());
+      if (m == null) throw const ApiError(416, 'bad_range');
+      final a = m.group(1)!;
+      final b = m.group(2)!;
+      if (a.isEmpty && b.isEmpty) throw const ApiError(416, 'bad_range');
+      if (a.isEmpty) {
+        start = length - int.parse(b);
+      } else {
+        start = int.parse(a);
+        if (b.isNotEmpty) end = int.parse(b);
+      }
+      if (start < 0) start = 0;
+      if (end >= length) end = length - 1;
+      if (start > end || start >= length) {
+        response.headers.set(HttpHeaders.contentRangeHeader, 'bytes */$length');
+        throw const ApiError(416, 'range_not_satisfiable');
+      }
+      response.statusCode = HttpStatus.partialContent;
+      response.headers.set(
+        HttpHeaders.contentRangeHeader,
+        'bytes $start-$end/$length',
+      );
+    }
+    final name = file.path.split('/').last;
+    final ascii = name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    response.headers
+      ..set(HttpHeaders.contentTypeHeader, 'application/octet-stream')
+      ..set('Accept-Ranges', 'bytes')
+      ..set(
+        'Content-Disposition',
+        "attachment; filename=\"$ascii\"; filename*=UTF-8''${Uri.encodeComponent(name)}",
+      )
+      ..contentLength = length == 0 ? 0 : end - start + 1;
+    if (request.method == 'HEAD' || length == 0) {
+      await response.close();
+      return;
+    }
+    if (start == 0) {
+      audit.record('download', {
+        'ip': client.ip,
+        'path': file.path,
+        'bytes': length,
+      });
+    }
+    await response.addStream(file.openRead(start, end + 1));
+    await response.close();
   }
 
   Map<String, Object?> _me(HttpRequest request, LoginSession login) {

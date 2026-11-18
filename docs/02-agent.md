@@ -81,6 +81,9 @@ root = "~"
 fleet_exec = true              # false = avvis alle flerserverjobber
 max_concurrent_runs = 4
 
+[update]
+url = ""                       # release-URL med SHA256SUMS(.sig); tom = innbakt standard
+
 [audit]
 enabled = true
 log_input = true
@@ -174,9 +177,14 @@ final class Session {
 | POST | `/api/auth/backup-codes` | ja | Lager 10 nye reservekoder (vises én gang), gamle slutter å virke |
 | GET | `/api/me` | ja | Versjon, innlogginger, passkeys, reservekoder igjen, TOTP på/av |
 | GET | `/api/ws` | ja | WebSocket (`WebSocketTransformer.upgrade`, `CompressionOptions`) |
-| GET | `/api/sse` | ja | Fallback-utstrøm |
-| POST | `/api/sse/send` | ja | Fallback-inn |
-| * | `/api/files/*` | ja | |
+| GET | `/api/sse` | ja | Fallback-utstrøm (`text/event-stream`), første hendelse `sse_open` med strøm-ID |
+| POST | `/api/sse/send?stream=ID` | ja + CSRF | Fallback-inn: JSON-liste med kontrollmeldinger og `{"t":"in",…}` |
+| GET | `/api/files/list?path=` | ja | Mappeinnhold (mapper først), `chunk_size`, `max_upload` |
+| GET/HEAD | `/api/files/download?path=` | ja | Nedlasting med `Range` (206), `Content-Disposition` |
+| POST | `/api/files/upload` | ja + CSRF | `{dir, name, size, overwrite?}` → `{id, offset}`; samme mål og størrelse gjenopptar |
+| POST | `/api/files/upload/ID` | ja + CSRF | Rå bytes med `Upload-Offset`; svar `{offset, done}`; feil offset → 409 med riktig `Upload-Offset` |
+| HEAD | `/api/files/upload/ID` | ja | `Upload-Offset` = mottatte bytes |
+| DELETE | `/api/files/upload/ID` | ja + CSRF | Avbryt og slett `.part` |
 | GET | `/healthz` | nei | `ok` |
 
 ## Kjøring av Dart-binæren

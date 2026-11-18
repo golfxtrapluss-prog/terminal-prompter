@@ -5,6 +5,7 @@ import 'package:web/web.dart' as web;
 import '../conn/connection.dart';
 import '../i18n/strings.dart';
 import 'dom.dart';
+import 'session_menu.dart';
 
 /// Top bar: connection dot, host, session name, RTT, transport, actions.
 /// Compact enough for a phone in portrait (docs/16).
@@ -18,12 +19,9 @@ final class TopBar {
     element = el('header', className: 'topbar');
     _dot = el('span', className: 'dot', title: 'disconnected');
     _host = el('span', className: 'host', text: connection.host);
-    _session = el('span', className: 'session');
     _rtt = el('span', className: 'rtt');
-    final transport = el('span', className: 'transport', text: 'WS');
-    final newSession =
-        el('button', text: strings['newSession']) as web.HTMLButtonElement;
-    newSession.onclick = ((web.Event _) => connection.newSession()).toJS;
+    _transport = el('span', className: 'transport', text: 'WS');
+    final sessionMenu = SessionMenu(connection, strings: strings);
     final settings = el(
       'button',
       className: 'icon-btn',
@@ -35,11 +33,10 @@ final class TopBar {
     element
       ..appendChild(_dot)
       ..appendChild(_host)
-      ..appendChild(_session)
       ..appendChild(el('span', className: 'spacer'))
       ..appendChild(_rtt)
-      ..appendChild(transport)
-      ..appendChild(newSession)
+      ..appendChild(_transport)
+      ..appendChild(sessionMenu.element)
       ..appendChild(settings);
     connection.states.listen(_onState);
     connection.rtt.listen((ms) => _rtt.textContent = '$ms ms');
@@ -53,8 +50,8 @@ final class TopBar {
   late final web.HTMLElement element;
   late final web.HTMLElement _dot;
   late final web.HTMLElement _host;
-  late final web.HTMLElement _session;
   late final web.HTMLElement _rtt;
+  late final web.HTMLElement _transport;
 
   void _onState(ConnState state) {
     final (cls, title, session) = switch (state) {
@@ -72,8 +69,8 @@ final class TopBar {
     };
     _dot.className = cls;
     _dot.title = title;
-    _session.textContent = session;
     _host.title = title;
+    if (state is Live) _transport.textContent = state.transport;
     if (state is! Live) _rtt.textContent = '';
   }
 }

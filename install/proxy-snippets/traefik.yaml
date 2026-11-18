@@ -1,0 +1,13 @@
+# Traefik dynamic configuration (Coolify: /data/coolify/proxy/dynamic/).
+# The agent must listen on the Docker bridge (listen = "172.17.0.1:7681").
+http:
+  routers:
+    tp:
+      rule: Host(`tp.example.com`)
+      entryPoints: [https]
+      service: tp
+      tls: { certResolver: letsencrypt }
+  services:
+    tp:
+      loadBalancer:
+        servers: [{ url: "http://host.docker.internal:7681" }]

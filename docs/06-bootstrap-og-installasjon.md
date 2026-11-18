@@ -71,6 +71,15 @@ Flagg for ikke-interaktiv bruk: `--mode`, `--domain`, `--email`, `--password-fil
 - `install.sh --link TPLK-XXXX-XXXX`: kobler serveren til relay uten domene (rute 1, v1.5, doc 17).
 - Uten flagg: interaktiv veiviser som spør hvilken rute.
 
+## Presiseringer fra implementasjonen (M6)
+
+- `install/install.sh` kjører i dash og BusyBox. Det verifiserer SHA-256 fra `SHA256SUMS` og at binæren starter, oppretter `tp`, kjører `tp-agent init` (passord vises én gang), skriver systemd-enhet (eller OpenRC-skript på Alpine), spør om sudo, og viser proxy-snutt for Caddy/nginx/Traefik, som bare skrives etter ja. Med `--domain` uten webserver installeres Caddy fra distribusjonens pakker.
+- Ekstern IP sjekkes mot `https://api.ipify.org` når `--domain` brukes (kun for å advare om feil DNS).
+- `--link` avsluttes med en melding om at relay kommer i v1.5.
+- Testkroker: `TP_ROOT`, `TP_NO_USER`, `TP_NO_SYSTEMD`, `TP_NO_HEALTH`, `TP_FAKE_SERVER`. `make install-test` kjører skriptet i en sandkasse under dash og BusyBox mot en lokal «release».
+- `make release` lager `dist/` med binærer, `install.sh` (med release-URL), `stub.sh` (med SHA-256 av `install.sh`), `SHA256SUMS` og `SHA256SUMS.sig`.
+- Docker-imaget (`docker/Dockerfile`) og `release.yml` er skrevet, men ikke bygget eller kjørt ennå.
+
 ## Reverse proxy-snutter (genereres av installer)
 
 **Caddy:**

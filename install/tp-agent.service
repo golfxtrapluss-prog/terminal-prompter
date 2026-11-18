@@ -1,0 +1,21 @@
+# Reference unit (docs/02); install.sh writes the real one with the right
+# user, home and capabilities.
+[Unit]
+Description=Terminal Prompter agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/tp-agent run --config /etc/tp-agent/config.toml
+User=tp
+WorkingDirectory=/home/tp
+Restart=always
+RestartSec=2
+KillMode=control-group
+ProtectSystem=full
+ReadWritePaths=/var/lib/tp-agent /home/tp
+# Only for mode = "standalone" on port 443:
+# AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

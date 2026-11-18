@@ -146,6 +146,14 @@ final class FilesConfig {
   final String root;
 }
 
+/// `[update]` section.
+final class UpdateConfig {
+  const UpdateConfig({required this.url});
+
+  /// Release base URL with `SHA256SUMS`, `SHA256SUMS.sig` and binaries.
+  final String url;
+}
+
 /// `[audit]` section.
 final class AuditConfig {
   const AuditConfig({
@@ -177,6 +185,7 @@ final class AgentConfig {
     required this.transport,
     required this.files,
     required this.audit,
+    this.update = const UpdateConfig(url: ''),
   });
 
   final AgentMode mode;
@@ -193,6 +202,7 @@ final class AgentConfig {
   final TransportConfig transport;
   final FilesConfig files;
   final AuditConfig audit;
+  final UpdateConfig update;
 
   /// Reads and parses [path].
   static Future<AgentConfig> load(
@@ -261,6 +271,7 @@ final class AgentConfig {
     final transport = top.section('transport');
     final files = top.section('files');
     final audit = top.section('audit');
+    final update = top.section('update');
 
     final config = AgentConfig(
       mode: mode,
@@ -330,6 +341,7 @@ final class AgentConfig {
           audit.string('path', '/var/lib/tp-agent/audit.jsonl'),
         ),
       ),
+      update: UpdateConfig(url: update.string('url', '')),
     );
     config._validate();
     return config;

@@ -12,6 +12,8 @@ import 'package:tp_agent/src/log.dart';
 import 'package:tp_agent/tp_agent.dart';
 import 'package:tp_protocol/tp_protocol.dart';
 
+import 'support/sse_client.dart';
+
 const _config = r'''
 listen = "127.0.0.1:1"
 
@@ -317,5 +319,68 @@ void main() {
       await c.socket.done.timeout(const Duration(seconds: 5));
       expect(c.closed, isTrue);
     });
+  });
+
+  group('sse fallback', () {
+    test(
+      'hello, attach, input with ack_in, output, resume and session list',
+      () async {
+        final c = SseTestClient(base);
+        await c.connect();
+        expect(c.stream, isNotNull);
+        expect(
+          await c.send(
+            const ClientHello(version: protocolVersion, client: 'sse-test'),
+          ),
+          204,
+        );
+        await c.next<ServerHello>();
+        await c.send(const Attach(name: 'via-sse', cols: 80, rows: 24));
+        final attached = await c.next<Attached>();
+        expect(attached.name, 'via-sse');
+        await c.waitOutput(r'TP$ ');
+
+        await c.input(
+          attached.session,
+          'echo over-sse\r',
+          id: 5,
+          prompter: true,
+        );
+        expect((await c.next<AckIn>()).id, 5);
+        await c.waitOutput('over-sse\r\n');
+        final seqAfter = c.lastSeq!;
+
+        // A second stream resumes with last_seq and sees only new output.
+        final d = SseTestClient(base);
+        await d.connect();
+        await d.send(
+          const ClientHello(version: protocolVersion, client: 'sse-test'),
+        );
+        await d.next<ServerHello>();
+        d.lastSeq = seqAfter;
+        await d.send(
+          Attach(
+            session: attached.session,
+            cols: 80,
+            rows: 24,
+            lastSeq: seqAfter,
+          ),
+        );
+        await d.next<Attached>();
+        await d.input(attached.session, 'echo second\r');
+        await d.waitOutput('second\r\n');
+        expect(d.output.toString(), isNot(contains('over-sse\r\n')));
+
+        // Unknown stream ids and malformed bodies are refused.
+        final bad = SseTestClient(base)..stream = 'nope';
+        expect(await bad.send(const ListSessions()), 404);
+        expect(await c.post(['not an object']), 400);
+
+        await sessions.kill(attached.session);
+        await c.close();
+        await d.close();
+        await bad.close();
+      },
+    );
   });
 }

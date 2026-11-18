@@ -1,0 +1,8 @@
+#cloud-config
+# Terminal Prompter on a new server (docs/06 route A). Paste as "user data"
+# when creating the server at Hetzner, DigitalOcean, AWS, ...
+# Replace __DOMAIN__ (or delete the --domain option) before use. The
+# generated password is in /var/log/cloud-init-output.log; log in, then add
+# a passkey and backup codes, and change the password with "tp-agent passwd".
+runcmd:
+  - [ sh, -c, "curl -fsSL __TP_INSTALL_URL__ | sh -s -- --yes --sudo --domain __DOMAIN__" ]

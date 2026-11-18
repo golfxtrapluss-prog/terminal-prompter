@@ -223,3 +223,31 @@ button.link { border: none; color: var(--accent); background: none; padding: 4px
   .codes { position: absolute; top: 0; left: 0; }
   .codes button { display: none; }
 }
+
+/* ---- sessions menu ---- */
+.session-menu { position: relative; min-width: 0; }
+.session-button { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-panel {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; min-width: 240px; max-width: 90vw;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4); display: flex; flex-direction: column; gap: 4px;
+}
+.session-row { display: flex; gap: 4px; align-items: center; }
+.session-row.current .session-pick { border-color: var(--accent); }
+.session-pick { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 40px; }
+.session-new { min-height: 40px; }
+
+/* ---- files ---- */
+.files-path { font: 13px ui-monospace, monospace; color: var(--muted); margin: 6px 0; word-break: break-all; }
+.files-list { display: flex; flex-direction: column; }
+.file-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+.file-name { flex: 1; text-align: left; border: none; background: none; color: var(--fg); padding: 10px 4px; text-decoration: none; font: 14px system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.file-name:hover, button.file-name:hover { color: var(--accent); }
+.upload-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin: 6px 0; font-size: 12px; }
+.upload-row progress { grid-column: 1 / span 2; width: 100%; }
+
+/* Toolbar fits one row on phones: icons only below 600 px. */
+@media (max-width: 600px) {
+  .toolbar .tool-label { display: none; }
+  .toolbar button.tool { min-width: 40px; }
+}

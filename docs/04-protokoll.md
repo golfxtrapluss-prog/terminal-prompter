@@ -110,6 +110,15 @@ Meldingene `exec_start`, `exec_cancel`, `exec_accepted`, `exec_rejected`, `exec_
 - **Tillatt `Origin`:** lik `public_origin` når den er satt; ellers må den være `http://` eller `https://` + `Host`-headeren.
 - **POST-krav:** `Content-Type: application/json`, tillatt `Origin`, og for innloggede kall `X-TP-CSRF` lik verdien i `tp_csrf`-cookien (dobbel innsending, bundet til innloggingen).
 
+### Tillegg fra M6 (SSE)
+
+SSE-fallbacken bærer nøyaktig de samme meldingene som WebSocket, så gjenopptak, idempotens og flytkontroll er uendret:
+
+- `GET /api/sse` (cookie kreves) åpner strømmen. Første hendelse er `event: ctl` med `{"t":"sse_open","stream":"<id>"}`. Deretter kommer `event: ctl` med kontrollmeldinger, og `event: out` med `{"s":"<session>","seq":N,"d":"<base64>"}`. En kommentar på 2 KB sendes først (bufrende proxyer), og `: hb` hvert `transport.heartbeat`. Når agenten avslutter, sendes `ctl {"t":"sse_close","code":N}` (4401 = innlogging avsluttet).
+- `POST /api/sse/send?stream=<id>` med JSON-liste. Elementene er kontrollmeldinger som over WebSocket, eller input `{"t":"in","session","id","d":"<base64>","p":true?}` (`p` = fra Prompter, tilsvarer rammetype 0x04). Svar 204. Strømmen er bundet til innloggingen som åpnet den; ukjent strøm gir 404.
+- Det brukes ikke `Last-Event-ID` eller `session`/`last_seq` i URL-en. Gjenopptak skjer med `attach {last_seq}` som over WebSocket.
+- Klienten bytter til SSE etter to mislykkede WebSocket-forsøk på rad mens `/api/me` svarer, og husker valget i 24 timer (`tp.transport`).
+
 ## Versjonering
 
 `v` i `hello`. Agent støtter nåværende og forrige versjon. Nye felter er alltid valgfrie; ukjente felter ignoreres.

@@ -12,6 +12,8 @@ import 'package:tp_agent/tp_agent.dart';
 import 'package:tp_netsim/tp_netsim.dart';
 import 'package:tp_protocol/tp_protocol.dart';
 
+import 'support/sse_client.dart';
+
 /// Scenarios 1-6 from docs/11 through the tp_netsim proxy with the geo and
 /// leo profiles. Scenario 5 (WebSocket blocked -> SSE) needs the SSE
 /// transport from M6 and is marked skipped until then.
@@ -335,9 +337,46 @@ void main() {
   }
 
   test(
-    '5. WebSocket blocked -> SSE fallback',
-    () {},
-    skip: 'needs the SSE transport (M6)',
+    '5. hostile: WebSocket blocked and idle cut-off, SSE works and stays up',
+    () async {
+      final proxy = await NetSimProxy.start(
+        targetPort: server.port,
+        profile: NetProfile.hostile,
+      );
+      addTearDown(proxy.stop);
+      await expectLater(
+        WebSocket.connect(
+          'ws://127.0.0.1:${proxy.port}/api/ws',
+        ).timeout(const Duration(seconds: 20)),
+        throwsA(anything),
+        reason: 'the proxy refuses the upgrade',
+      );
+      final c = SseTestClient(Uri.parse('http://127.0.0.1:${proxy.port}/'));
+      final sw = Stopwatch()..start();
+      await c.connect();
+      await c.send(
+        const ClientHello(version: protocolVersion, client: 'netsim-sse'),
+      );
+      await c.next<ServerHello>();
+      await c.send(const Attach(cols: 80, rows: 24));
+      final attached = await c.next<Attached>();
+      await c.waitOutput(r'TP$ ');
+      expect(
+        sw.elapsed,
+        lessThan(const Duration(seconds: 10)),
+        reason: 'docs/11: usable within 10 s',
+      );
+      await c.input(attached.session, 'seq 1 2000; echo END-S5\r');
+      await c.waitOutput('END-S5', timeout: const Duration(seconds: 120));
+      // Heartbeat comments (2 s in this config) keep the 45 s idle cut-off away.
+      await Future<void>.delayed(const Duration(seconds: 50));
+      expect(c.closed, isFalse, reason: 'stream survives the idle cut-off');
+      await c.input(attached.session, 'echo still-here\r');
+      await c.waitOutput('still-here');
+      await sessions.kill(attached.session);
+      await c.close();
+    },
+    timeout: const Timeout(Duration(minutes: 4)),
   );
 }
 

@@ -6,6 +6,7 @@ build/
 
 # Build outputs
 /bin/
+/dist/
 packages/tp_agent/web_build/
 packages/tp_agent/lib/src/generated/assets.g.dart
 
