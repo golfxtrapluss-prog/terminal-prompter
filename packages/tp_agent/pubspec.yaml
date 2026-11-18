@@ -16,6 +16,7 @@ dependencies:
   ffi: ^2.1.0
   logging: ^1.3.0
   path: ^1.9.1
+  pointycastle: ^4.0.0
   toml: ^0.18.0
   tp_protocol: ^0.1.0
 

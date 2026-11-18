@@ -15,6 +15,7 @@ final class SettingsPanel {
     required this.settings,
     required this.onSave,
     required this.onClearHistory,
+    required this.onOpenSecurity,
   }) {
     element = el('aside', className: 'settings hidden');
   }
@@ -26,6 +27,9 @@ final class SettingsPanel {
   /// (language change).
   final void Function({required bool reload}) onSave;
   final void Function() onClearHistory;
+
+  /// Opens Settings > Security.
+  final void Function() onOpenSecurity;
   late final web.HTMLElement element;
 
   bool get isOpen => !element.classList.contains('hidden');
@@ -148,8 +152,14 @@ final class SettingsPanel {
     clear.onclick = ((web.Event _) => onClearHistory()).toJS;
     final closeBtn = el('button', text: strings['settings.close']);
     closeBtn.onclick = ((web.Event _) => close()).toJS;
+    final security = el('button', text: '🔒 ${strings['security.open']}');
+    security.onclick = ((web.Event _) {
+      close();
+      onOpenSecurity();
+    }).toJS;
     actions
       ..appendChild(save)
+      ..appendChild(security)
       ..appendChild(clear)
       ..appendChild(closeBtn);
     element

@@ -31,6 +31,19 @@ Terminal Prompter gir **root-ekvivalent tilgang via nettleser på port 443**. Et
 
 10 engangskoder for når passkey-enheten er tapt (f.eks. telefon mistet på sjøen). Lagres som argon2id-hasher, virker én gang, ny generering ugyldiggjør gamle. Detaljer i doc 17.
 
+## Presiseringer fra implementasjonen (M5)
+
+- **Ingen passord, ingen tjeneste:** `tp-agent run` nekter å starte uten `password_hash`, også på 127.0.0.1 (proxy-modus lytter på loopback, men er nåbar via reverse proxy).
+- **Lockout gjelder passord og reservekoder,** globalt på tvers av IP-er, etter `max_failed_logins` påfølgende feil. Passkey-innlogging er ikke omfattet, slik at en angriper som gjetter passord ikke kan stenge eieren ute. Alle innloggingsforsøk er i tillegg begrenset til 5/min per IP og 30/min totalt. I proxy-modus brukes siste adresse i `X-Forwarded-For` når forespørselen kommer fra loopback.
+- **Feilmeldinger** sier aldri hvilken faktor som var feil (`invalid_credentials`).
+- **TOTP** krever passord + kode i samme forespørsel. Siste brukte tidssteg lagres i tilstandsfilen, så en kode virker bare én gang.
+- **Innloggingsøkter** ligger bare i minnet (SHA-256 av token). Absolutt levetid `session_ttl`, idle-utløp `idle_timeout`, og bytte av User-Agent avslutter økten. Omstart av agenten logger alle ut.
+- **Passkeys:** kun ES256 (P-256), brukerverifisering kreves, attestasjonsutsagn ignoreres (vi stoler på nøkkelen, ikke på produsenten). Telleren må øke når den ikke er 0 (oppdager klonede nøkler). rpId er vertsnavnet i `public_origin` eller `Host`.
+- **Reservekoder:** argon2id (m=19 MiB, t=2, p=1) med felles salt per sett, slik at hvert forsøk koster én hash uansett hvor mange koder som er igjen. Trygt fordi hver kode er en tilfeldig hemmelighet på ~49 bit.
+- **Passordliste:** «topp-10k» er utvidet med NCSC-listen over de 100 000 mest brukte passordene (SecLists), filtrert til oppføringer på minst 12 tegn, siden kortere passord uansett avvises (1 197 oppføringer). Se ADR-018.
+- **Filer:** `config.toml`, `auth.json` og `audit.jsonl` skrives med rettigheter 0600; konfig og tilstand skrives atomisk (midlertidig fil + rename).
+- **Revisjonslogg** roteres ved 10 MB (én eldre fil beholdes). Hendelser: `login_ok`, `login_fail`, `lockout`, `logout`, `logout_all`, `passkey_added`, `passkey_removed`, `backup_codes_generated`, `backup_code_used`, `session_start`, `session_end`, `cmd`.
+
 ## Relay og tillit (v1.5)
 
 Relay ruter TLS gjennom uten å terminere den (SNI-ruting), og agentens TLS-privatnøkkel lages og blir på serveren. Relay kan derfor ikke lese kommandoer eller output. Dette dokumenteres åpent på nettsiden, fordi det er hovedargumentet for å stole på tjenesten. Detaljer i doc 17.

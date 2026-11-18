@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:tp_protocol/tp_protocol.dart';
 
+import '../audit/audit_log.dart';
 import '../config/config.dart';
 import '../pty/pty_process.dart';
 import 'session.dart';
@@ -45,7 +46,9 @@ final class SessionManager {
     required this.config,
     DateTime Function()? clock,
     Map<String, String>? environment,
-  }) : _clock = clock ?? DateTime.now,
+    AuditLog? audit,
+  }) : audit = audit ?? AuditLog.disabled(),
+       _clock = clock ?? DateTime.now,
        _environment = environment ?? Platform.environment;
 
   /// How long an exited session stays listed before it is removed.
@@ -53,6 +56,9 @@ final class SessionManager {
 
   /// Agent configuration.
   final AgentConfig config;
+
+  /// Audit log for session start/end.
+  final AuditLog audit;
 
   final DateTime Function() _clock;
   final Map<String, String> _environment;
@@ -117,9 +123,15 @@ final class SessionManager {
       'name': session.name,
       'pid': pty.pid,
     });
+    audit.record('session_start', {'sid': '$id', 'name': session.name});
     unawaited(
       pty.exited.then((info) {
         _log.info({'msg': 'session_exit', 'sid': '$id', 'exit': '$info'});
+        audit.record('session_end', {
+          'sid': '$id',
+          'reason': 'exit',
+          'exit': '$info',
+        });
       }),
     );
     return session;
@@ -131,6 +143,7 @@ final class SessionManager {
     await session.terminate();
     _sessions.remove(id);
     _log.info({'msg': 'session_kill', 'sid': '$id'});
+    audit.record('session_end', {'sid': '$id', 'reason': 'killed'});
   }
 
   /// Starts periodic clean-up of idle and exited sessions.

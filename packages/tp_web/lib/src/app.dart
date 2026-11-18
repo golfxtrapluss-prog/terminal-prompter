@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:tp_protocol/tp_protocol.dart';
 import 'package:web/web.dart' as web;
 
+import 'api_client.dart';
 import 'client_info.dart';
 import 'conn/connection.dart';
 import 'conn/ws_transport.dart';
@@ -14,7 +15,9 @@ import 'settings.dart';
 import 'storage.dart';
 import 'ui/dom.dart';
 import 'ui/keybar.dart';
+import 'ui/login_view.dart';
 import 'ui/prompter.dart';
+import 'ui/security_panel.dart';
 import 'ui/settings_panel.dart';
 import 'ui/terminal_view.dart';
 import 'ui/topbar.dart';
@@ -38,6 +41,8 @@ final class App implements KeyBarListener {
   late final PrompterView _prompter;
   late final KeyBar _keyBar;
   late final SettingsPanel _settingsPanel;
+  late final SecurityPanel _securityPanel;
+  late final ApiClient _api = ApiClient(_basePath());
   late final web.HTMLElement _hint;
   late final web.HTMLElement _modeButton;
   InputMode _mode = InputMode.prompter;
@@ -54,6 +59,55 @@ final class App implements KeyBarListener {
     );
     _touch = web.window.matchMedia('(pointer: coarse)').matches;
 
+    unawaited(_checkAuthAndStart());
+  }
+
+  /// Shows the login page when there is no valid login, otherwise starts
+  /// the terminal. A network failure starts the terminal anyway (the PWA
+  /// opened offline); the connection checks again when it can.
+  Future<void> _checkAuthAndStart() async {
+    try {
+      await _api.get('me');
+    } on ApiException catch (e) {
+      if (e.status == 401) {
+        await _showLogin();
+        return;
+      }
+    }
+    _startTerminal();
+  }
+
+  Future<void> _showLogin() async {
+    _root.textContent = '';
+    _root.className = 'login-mode';
+    Map<String, Object?> methods;
+    try {
+      methods = await _api.get('auth/methods');
+    } on ApiException {
+      methods = const {};
+    }
+    final view = LoginView(
+      api: _api,
+      strings: _strings,
+      host: web.window.location.host,
+      onLoggedIn: (notice) {
+        if (notice != null) {
+          try {
+            web.window.sessionStorage.setItem('tp.notice', notice);
+          } on Object {
+            // Storage blocked; the notice is only a convenience.
+          }
+        }
+        // A fresh page load keeps start-up simple and picks up the cookie.
+        web.window.location.reload();
+      },
+    );
+    _root.appendChild(view.build(methods));
+    view.focus();
+  }
+
+  void _startTerminal() {
+    _root.className = '';
     final terminalHost = el('main', className: 'terminal');
     _terminal = TerminalView(
       terminalHost,
@@ -66,6 +120,14 @@ final class App implements KeyBarListener {
       transportFactory: WsClientTransport.new,
       clientId: clientIdentifier(),
       store: _store,
+      checkAuth: () async {
+        try {
+          await _api.get('me');
+          return true;
+        } on ApiException catch (e) {
+          return e.status != 401;
+        }
+      },
     );
     _prompter = PrompterView(
       strings: _strings,
@@ -87,6 +149,12 @@ final class App implements KeyBarListener {
       settings: _settings,
       onSave: _applySettings,
       onClearHistory: _prompter.history.clear,
+      onOpenSecurity: () => unawaited(_securityPanel.open()),
+    );
+    _securityPanel = SecurityPanel(
+      api: _api,
+      strings: _strings,
+      onLoggedOut: () => web.window.location.reload(),
     );
     final topbar = TopBar(
       _connection,
@@ -134,7 +202,8 @@ final class App implements KeyBarListener {
       ..appendChild(topbar.element)
       ..appendChild(terminalHost)
       ..appendChild(bottom)
-      ..appendChild(_settingsPanel.element);
+      ..appendChild(_settingsPanel.element)
+      ..appendChild(_securityPanel.element);
 
     ViewportManager(_root).onChange = _terminal.fit;
     _applyKeyBarVisibility(_settings.keyBarVisibleFor(touch: _touch));
@@ -152,8 +221,17 @@ final class App implements KeyBarListener {
     _terminal.fit();
 
     _setMode(_settings.modeFor(touch: _touch));
+    var noticeShown = false;
     _connection.states.listen((state) {
-      if (state is Live) _focusInput();
+      if (state is Live) {
+        _focusInput();
+        // After the first attach, which clears the screen.
+        if (!noticeShown) {
+          noticeShown = true;
+          _showPendingNotice();
+        }
+      }
+      if (state is AuthRequired) unawaited(_showLogin());
     });
     web.window.addEventListener(
       'online',
@@ -387,15 +465,31 @@ final class App implements KeyBarListener {
     _setMode(_mode);
   }
 
+  /// Shows a message carried over a login reload (e.g. backup code used).
+  void _showPendingNotice() {
+    try {
+      final notice = web.window.sessionStorage.getItem('tp.notice');
+      if (notice == null) return;
+      web.window.sessionStorage.removeItem('tp.notice');
+      _terminal.writeNotice(notice);
+    } on Object {
+      // Storage blocked; nothing to show.
+    }
+  }
+
   /// `ws(s)://host/<base path>api/ws`, derived from the page URL so a
   /// configured `base_path` is honoured.
   static String _wsUrl() {
     final location = web.window.location;
     final scheme = location.protocol == 'https:' ? 'wss' : 'ws';
-    final path = location.pathname;
-    final base = path.endsWith('/')
+    return '$scheme://${location.host}${_basePath()}api/ws';
+  }
+
+  /// The page's directory, i.e. the configured `base_path`.
+  static String _basePath() {
+    final path = web.window.location.pathname;
+    return path.endsWith('/')
         ? path
         : path.substring(0, path.lastIndexOf('/') + 1);
-    return '$scheme://${location.host}${base}api/ws';
   }
 }

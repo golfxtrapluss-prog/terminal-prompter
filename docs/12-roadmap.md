@@ -37,6 +37,7 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 ## M5 – Sikkerhet og innlogging (2–3 dager)
 - `tp-agent init/passwd/totp`, argon2id, TOTP, **passkeys (WebAuthn)**, cookie + CSRF, Origin-sjekk, rate limit, lockout, sikkerhetshoder, auditlogg, `base_path`.
 - **Akseptanse:** sikkerhetsscenariene i doc 11 grønne; ingen hemmeligheter i logger (grep-test).
+- **Status:** ✅ ferdig 18.11.2026. `packages/tp_agent/test/security_test.dart`: feil Origin → 403, uten cookie → 401, lockout etter 5 feil (på tvers av IP-er), rate limit per IP, CSRF, TOTP med gjenbruksvern, reservekoder én gang, utlogging lukker WebSocket (4401), revisjonslogg med maskering, grep-test uten funn i logg/revisjonslogg/tilstandsfil. Krypto testet mot RFC 9106, RFC 6238 og RFC 6979; WebAuthn mot programvare-autentikator. Verifisert i nettleser (mobilvisning): innlogging, reservekoder, utlogging overalt. Path traversal i filer (scenario 7, siste del) kommer med filoverføring i M6. Passkey-registrering i ekte nettleser/telefon er ikke testet ennå.
 
 ## M6 – Installasjon, filer, SSE, flere sesjoner (3 dager)
 - `install.sh`, `stub.sh`, systemd, proxy-snutter (Caddy/nginx/Traefik), Docker-image med `nsenter`-modus, cloud-init-mal.

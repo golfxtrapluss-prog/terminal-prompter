@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:logging/logging.dart';
 
+import '../audit/audit_log.dart';
+import '../auth/auth_service.dart';
+import '../auth/auth_store.dart';
 import '../config/config.dart';
 import '../generated/assets.g.dart';
 import '../log.dart';
@@ -75,12 +78,37 @@ final class RunCommand extends Command<int> {
       });
     }
 
-    final sessions = SessionManager(config: config)..start();
+    // Fail safe (docs/01): no password, no service.
+    if (!config.auth.isConfigured) {
+      _err.writeln(
+        'tp-agent: no password is set in ${results.option('config')}; '
+        'run "tp-agent init" (or "tp-agent passwd") first',
+      );
+      return 78;
+    }
+    final audit = config.audit.enabled
+        ? AuditLog(path: config.audit.path)
+        : AuditLog.disabled();
+    final AuthService auth;
+    try {
+      auth = AuthService(
+        config: config,
+        store: AuthStore(config.auth.stateFile),
+        audit: audit,
+      );
+    } on StateError catch (e) {
+      _err.writeln('tp-agent: ${e.message}');
+      return 78;
+    }
+
+    final sessions = SessionManager(config: config, audit: audit)..start();
     final server = AgentServer(
       config: config,
       sessions: sessions,
       staticFiles: staticFiles,
       agentVersion: tpVersion,
+      auth: auth,
+      audit: audit,
     );
     try {
       await server.start();
@@ -108,6 +136,7 @@ final class RunCommand extends Command<int> {
     }
     log.info({'msg': 'stopping', 'signal': signal.name});
     await server.stop();
+    audit.close();
     await sessions.shutdown();
     return 0;
   }

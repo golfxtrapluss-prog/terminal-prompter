@@ -81,3 +81,14 @@ Format: Kontekst → Beslutning → Konsekvenser. Nye beslutninger legges til ne
 - **Kontekst:** En isolate som står i blokkerende `read()` kan ikke stoppes fra hovedisolatet; `close()` på master-fd fra en annen tråd vekker ikke `read()` pålitelig. Bakgrunnsjobber (`sleep 1000 &`) havner i egne prosessgrupper, så `kill(-pgid)` alene etterlater foreldreløse prosesser.
 - **Beslutning:** Leser-isolatet venter i `poll()` på master-fd **og** leseenden av et `pipe2`-rør; én byte i røret stopper leseren deterministisk. Master åpnes `O_NONBLOCK` så skriving aldri blokkerer event-løkken (EAGAIN → kort venting, tidsavbrudd → `PtyWriteTimeout`). `PtyProcess.kill()` signaliserer kommandoens gruppe og deretter alle prosesser i `/proc` med samme sesjons-id; `terminate()` eskalerer TERM → KILL.
 - **Konsekvenser:** To ekstra fd-er per sesjon. `/proc`-skanning koster litt ved drap (sjelden operasjon). Interaktiv bash ignorerer SIGTERM, så drap av en sesjon tar normalt `grace` (standard 2 s) før KILL.
+
+## ADR-017: Egen streng CBOR-dekoder for WebAuthn; attestasjon ignoreres
+- **Kontekst:** ADR-012 tillot `package:cbor`. Siste versjon (6.5) krever Dart ≥ 3.13, mens prosjektet lover 3.8, og trekker inn fem pakker. WebAuthn bruker bare heltall, byte- og tekststrenger, lister og map.
+- **Beslutning:** `lib/src/auth/cbor.dart` (~150 linjer) dekoder kun det WebAuthn trenger og avviser ubestemte lengder, tagger, flyttall, dupliserte nøkler, for dyp nesting og for mange elementer. Attestasjonsutsagn (`attStmt`) verifiseres ikke for noe format; vi bruker bare den attesterte offentlige nøkkelen, og ber om `attestation: "none"`.
+- **Konsekvenser:** Ingen ny avhengighet, liten og testbar angrepsflate. `cbor` står fortsatt som tillatt i CLAUDE.md, men brukes ikke. Kan ikke begrense passkeys til bestemte produsenter (ikke et mål for egne enheter).
+
+## ADR-018: Autentiseringstilstand, passordliste og QR-koder i agenten
+- **Kontekst:** Passkeys, reservekoder og TOTP-gjenbruksvern må overleve omstart, men hører ikke hjemme i `config.toml` (som redigeres av mennesker og `tp-agent passwd`). Passordpolicyen sier «topp-10k», men bare 10 av de 10 000 vanligste passordene har 12+ tegn. `tp-agent totp enable` skal vise QR-kode i terminalen.
+- **Beslutning:** Egen tilstandsfil `[auth] state_file` (JSON, 0600, atomisk skriving). Passordlisten genereres fra SecLists `10k-most-common.txt` + `100k-most-used-passwords-NCSC.txt`, filtrert til ≥ 12 tegn, til `lib/src/auth/common_passwords.g.dart` (oppdateres med et engangsskript ved behov). QR-koder lages av en egen koder (`lib/src/cli/qr.dart`, byte-modus, nivå M, versjon 1–10), verifisert modul for modul mot `segno` og `qrcode` (Python) i `test/qr_test.dart`.
+- **Konsekvenser:** Én fil til å sikkerhetskopiere. Passordsjekken stopper ~1 200 vanlige lange passord. Ingen nye pub-avhengigheter.
+

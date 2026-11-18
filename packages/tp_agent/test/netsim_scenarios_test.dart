@@ -182,6 +182,7 @@ void main() {
       config: config,
       sessions: sessions,
       staticFiles: DirectoryStaticFiles(webDir.path),
+      auth: null,
       agentVersion: 'netsim',
       port: 0,
     );

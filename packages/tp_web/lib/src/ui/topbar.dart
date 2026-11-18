@@ -60,6 +60,7 @@ final class TopBar {
     final (cls, title, session) = switch (state) {
       Live(:final name) => ('dot live', strings['status.connected'], name),
       Connecting() => ('dot connecting', strings['status.connecting'], ''),
+      AuthRequired() => ('dot down', 'login required', ''),
       Attaching() => ('dot connecting', strings['status.connecting'], ''),
       Disconnected(:final reason, :final retryIn) => (
         'dot down',

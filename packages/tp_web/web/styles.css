@@ -185,3 +185,41 @@ button.danger { background: var(--bad); color: #fff; border-color: var(--bad); f
   .prompter .send { min-height: 30px; }
   .keybar-row { padding: 2px 6px; }
 }
+
+/* ---- login (docs/05, docs/16) ---- */
+#app.login-mode { align-items: center; justify-content: center; overflow: auto; }
+.login { width: 100%; display: flex; justify-content: center; padding: 16px; }
+.login-card {
+  width: min(380px, 100%); background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px 20px; display: flex; flex-direction: column; gap: 12px;
+}
+.login-card h1 { margin: 0; font-size: 20px; }
+.login-card p { margin: 0; }
+.login-logo { font: 700 28px ui-monospace, monospace; color: var(--ok); }
+.login-form { display: flex; flex-direction: column; gap: 12px; }
+.login-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.login-form input {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; font: 16px system-ui, sans-serif; /* 16px: no zoom-on-focus on iOS */
+}
+.login-form input:focus { border-color: var(--accent); outline: none; }
+.login-error { color: var(--bad); min-height: 1.2em; }
+.login-or { text-align: center; color: var(--muted); }
+button.wide { width: 100%; min-height: 44px; font-size: 15px; }
+button.link { border: none; color: var(--accent); background: none; padding: 4px 0; text-align: left; }
+
+/* ---- security panel ---- */
+.panel-header { display: flex; align-items: center; justify-content: space-between; }
+.security h3 { margin: 18px 0 6px; font-size: 14px; }
+.sec-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.sec-row .muted { grid-column: 1; font-size: 12px; }
+.sec-row button { grid-column: 2; grid-row: 1 / span 2; }
+.notice { background: #102a1a; border: 1px solid var(--ok); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+.warn { color: var(--warn); }
+.code-list { font: 18px/1.6 ui-monospace, monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; user-select: all; }
+@media print {
+  body * { visibility: hidden; }
+  .codes, .codes * { visibility: visible; color: #000; background: #fff; }
+  .codes { position: absolute; top: 0; left: 0; }
+  .codes button { display: none; }
+}

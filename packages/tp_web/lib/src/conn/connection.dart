@@ -33,6 +33,12 @@ final class Disconnected extends ConnState {
   final int attempt;
 }
 
+/// The agent wants a login (cookie missing or expired). Reconnecting stops
+/// until the user has logged in again.
+final class AuthRequired extends ConnState {
+  const AuthRequired();
+}
+
 /// Socket opening or `hello` in flight.
 final class Connecting extends ConnState {
   const Connecting();
@@ -90,6 +96,7 @@ final class Connection {
     Duration heartbeat = Limits.heartbeat,
     Duration deadAfter = Limits.deadAfter,
     Random? random,
+    this.checkAuth,
   }) : _wsUrl = wsUrl,
        _factory = transportFactory,
        _clientId = clientId,
@@ -103,6 +110,12 @@ final class Connection {
 
   /// The terminal view.
   final TerminalSink terminal;
+
+  /// Asks the agent whether the login is still valid (`GET /api/me`).
+  /// Returns false only for a definite "not logged in"; network trouble
+  /// counts as true so the normal backoff continues. Called when a
+  /// connection fails to open or is closed with code 4401.
+  final Future<bool> Function()? checkAuth;
 
   final String _wsUrl;
   final TransportFactory _factory;
@@ -120,7 +133,7 @@ final class Connection {
       StreamController<Uint8List>.broadcast();
 
   /// Input sent but not yet confirmed with `ack_in`, in send order.
-  final Map<int, Uint8List> _unackedInput = {};
+  final Map<int, (Uint8List, bool)> _unackedInput = {};
 
   ClientTransport? _transport;
   ConnState _state = const Disconnected('not started');
@@ -206,13 +219,15 @@ final class Connection {
   /// Sends keyboard input (UTF-8 bytes) to the attached session. Input is
   /// kept until acknowledged and resent after a reconnect. Returns the
   /// `client_msg_id`, or null when there is no session to send to.
-  int? sendInput(Uint8List data) {
+  int? sendInput(Uint8List data, {bool fromPrompter = false}) {
     final session = _session;
     if (session == null) return null;
     final id = _nextMsgId++;
-    _unackedInput[id] = data;
+    _unackedInput[id] = (data, fromPrompter);
     if (_state is Live) {
-      _transport?.sendBinary(encodeInputFrame(session, id, data));
+      _transport?.sendBinary(
+        encodeInputFrame(session, id, data, fromPrompter: fromPrompter),
+      );
     }
     return id;
   }
@@ -276,6 +291,26 @@ final class Connection {
       return;
     }
     final wasLive = _state is Live;
+    final check = checkAuth;
+    if (check != null && (!wasLive || transport.closeCode == 4401)) {
+      _setState(const Connecting());
+      unawaited(
+        check().then((ok) {
+          if (_stopped) return;
+          if (!ok) {
+            _stopped = true;
+            _setState(const AuthRequired());
+            return;
+          }
+          _scheduleRetry(wasLive: false);
+        }),
+      );
+      return;
+    }
+    _scheduleRetry(wasLive: wasLive);
+  }
+
+  void _scheduleRetry({required bool wasLive}) {
     if (wasLive) _attempt = 0;
     final delay = _wantNewSession ? Duration.zero : _backoff.delay(_attempt);
     _setState(
@@ -413,7 +448,10 @@ final class Connection {
     final transport = _transport;
     if (session == null || transport == null) return;
     for (final entry in _unackedInput.entries) {
-      transport.sendBinary(encodeInputFrame(session, entry.key, entry.value));
+      final (data, prompter) = entry.value;
+      transport.sendBinary(
+        encodeInputFrame(session, entry.key, data, fromPrompter: prompter),
+      );
     }
   }
 

@@ -286,7 +286,7 @@ final class PrompterView {
 
   void _dispatch(PendingCommand cmd) {
     if (!connection.isLive) return;
-    final id = connection.sendInput(cmd.bytes);
+    final id = connection.sendInput(cmd.bytes, fromPrompter: true);
     if (id == null) return;
     queue.markSent(cmd, id);
   }

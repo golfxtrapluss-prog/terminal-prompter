@@ -29,6 +29,9 @@ final class FakeTransport implements ClientTransport {
   bool closed = false;
 
   @override
+  int? closeCode;
+
+  @override
   Future<void> get opened => _opened.future;
 
   @override

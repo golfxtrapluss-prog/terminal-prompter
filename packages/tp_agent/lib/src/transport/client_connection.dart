@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:logging/logging.dart';
 import 'package:tp_protocol/tp_protocol.dart';
 
+import '../audit/audit_log.dart';
 import '../pty/errors.dart';
 import '../session/session.dart';
 import '../session/session_manager.dart';
@@ -21,7 +23,28 @@ final class ClientConnection {
     required this.sessions,
     required this.agentVersion,
     required this.host,
-  });
+    AuditLog? audit,
+    this.clientIp = '',
+    this.logInput = true,
+    this.onActivity,
+  }) : audit = audit ?? AuditLog.disabled();
+
+  /// How often [onActivity] is consulted at most.
+  static const Duration activityCheck = Duration(seconds: 30);
+
+  /// Audit log for Prompter command lines.
+  final AuditLog audit;
+
+  /// Client address for audit entries.
+  final String clientIp;
+
+  /// `audit.log_input`: record Prompter lines.
+  final bool logInput;
+
+  /// Called on traffic (throttled); returning false means the login behind
+  /// this connection has ended and the connection is closed.
+  final bool Function()? onActivity;
+  DateTime _lastActivityCheck = DateTime.fromMillisecondsSinceEpoch(0);
 
   static int _counter = 0;
 
@@ -65,6 +88,17 @@ final class ClientConnection {
   }
 
   Future<void> _handleFrame(TransportFrame frame) async {
+    final check = onActivity;
+    if (check != null) {
+      final now = DateTime.now();
+      if (now.difference(_lastActivityCheck) >= activityCheck) {
+        _lastActivityCheck = now;
+        if (!check()) {
+          await transport.close(code: 4401, reason: 'login expired');
+          return;
+        }
+      }
+    }
     try {
       switch (frame) {
         case TextFrame(:final text):
@@ -141,7 +175,12 @@ final class ClientConnection {
 
   Future<void> _handleBinary(BinaryMessage message) async {
     switch (message) {
-      case InputFrame(:final session, :final clientMsgId, :final data):
+      case InputFrame(
+        :final session,
+        :final clientMsgId,
+        :final data,
+        :final fromPrompter,
+      ):
         if (!_helloDone) {
           _sendError(ErrorCode.badMessage, 'hello must be the first message');
           return;
@@ -153,6 +192,7 @@ final class ClientConnection {
           _instanceKey,
           clientMsgId,
         )) {
+          if (fromPrompter && logInput) _auditCommand(attachment.session, data);
           await attachment.session.write(data);
         }
         _send(AckIn(session: session, id: clientMsgId));
@@ -224,6 +264,23 @@ final class ClientConnection {
       );
       offset = end;
     }
+  }
+
+  /// Records a Prompter line (docs/05). A line typed right after a password
+  /// prompt is masked, in case the user answered `sudo` from the Prompter.
+  void _auditCommand(Session session, Uint8List data) {
+    var line = utf8
+        .decode(data, allowMalformed: true)
+        .replaceAll('\x1b[200~', '')
+        .replaceAll('\x1b[201~', '');
+    if (line.endsWith('\r')) line = line.substring(0, line.length - 1);
+    line = line.replaceAll('\r', '\n');
+    if (line.length > 4096) line = '${line.substring(0, 4096)}…';
+    audit.record('cmd', {
+      'sid': '${session.id}',
+      'ip': clientIp,
+      'line': session.awaitingPassword ? '***' : line,
+    });
   }
 
   Future<void> _dropSlowConsumer(Session session) async {

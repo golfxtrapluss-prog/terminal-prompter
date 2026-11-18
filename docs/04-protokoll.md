@@ -8,7 +8,8 @@ Protokollversjon: **1**. Transport: WebSocket (`/api/ws`) eller SSE-fallback. Sa
 - **Binærframes:** terminaldata, for å unngå base64-overhead:
 
 ```
-byte 0       : type   (0x01 = output fra server, 0x02 = input fra klient)
+byte 0       : type   (0x01 = output fra server, 0x02 = input fra klient,
+                       0x04 = input fra Prompter-feltet; 0x03 reservert v2)
 byte 1..16   : session_id (16 byte rå)
 byte 17..24  : seq (uint64 big-endian) – kun output; for input: client_msg_id
 byte 25..    : data (rå bytes, UTF-8 fra PTY)
@@ -100,6 +101,14 @@ Meldingene `exec_start`, `exec_cancel`, `exec_accepted`, `exec_rejected`, `exec_
 - **Flytkontroll i praksis:** agenten sender live output til en klient inntil 2 MB er ubekreftet, og pauser deretter. Ved `ack` som bringer ubekreftet under 1 MB tas det igjen fra ringbufferen. Er klientens posisjon overskrevet i mellomtiden (eller ligger mer enn 4 MB bak), lukkes forbindelsen med WebSocket-kode 1008 «slow consumer»; klienten kobler til igjen med `last_seq` og får `attached.truncated`. Minnet per treg klient er dermed begrenset av ringbufferen.
 - **Heartbeat:** agenten sender WebSocket-ping-rammer (protokollnivå, usynlige for applikasjonen) hvert `transport.heartbeat` (standard 15 s). Uteblir pong innen **samme intervall**, lukker agenten forbindelsen (dart:io-semantikk: tidsavbrudd = intervall). Klienten sender i tillegg `ping` hvert 15 s og regner forbindelsen som død etter 30 s uten mottatte rammer. Heartbeat må være lengre enn RTT; for satellitt er 15 s god margin.
 - **Klientens gjenoppkobling:** backoff 0,5/1/2/4/8/10 s med ±25 % jitter, nullstilles når forbindelsen er live; umiddelbart nytt forsøk ved `online`-hendelse og når fanen blir synlig. Ubekreftet input sendes på nytt med samme `client_msg_id` etter `attached`.
+
+### Tillegg fra M5 (sikkerhet)
+
+- **Rammetype `0x04`** har samme layout som `0x02`, men markerer at input kommer fra Prompter-feltet. Agenten skriver slike linjer til revisjonsloggen (`ev: "cmd"`) når `audit.log_input = true`. Rå tastetrykk (`0x02`) logges aldri. Er siste output-linje en passordprompt (`password:`, `passord:`, `passphrase:`, `PIN:`), maskeres linjen som `***`. Idempotens og `ack_in` er som for `0x02`.
+- **Innlogging kreves:** `/api/ws` svarer `401` uten gyldig `tp_session`-cookie og `403` når `Origin` ikke er tillatt, før oppgradering. Maks 10 samtidige WebSockets per innlogging (`429`).
+- **Lukkekode `4401`:** agenten lukker WebSocket med 4401 når innloggingen avsluttes (utlogging, «logg ut overalt», utløp). Klienten spør da `GET /api/me`; ved `401` viser den innloggingssiden og slutter å koble til.
+- **Tillatt `Origin`:** lik `public_origin` når den er satt; ellers må den være `http://` eller `https://` + `Host`-headeren.
+- **POST-krav:** `Content-Type: application/json`, tillatt `Origin`, og for innloggede kall `X-TP-CSRF` lik verdien i `tp_csrf`-cookien (dobbel innsending, bundet til innloggingen).
 
 ## Versjonering
 

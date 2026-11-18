@@ -83,6 +83,11 @@ abstract final class BinaryFrame {
   /// Output of a multi-server run (v2, relay mode only). Reserved; never reuse.
   static const int typeExecOut = 0x03;
 
+  /// Input typed in the Prompter field, client to server. Same layout as
+  /// [typeInput]; the agent may record it in the audit log, whereas Raw
+  /// keystrokes (which can contain passwords) are never logged.
+  static const int typePrompterInput = 0x04;
+
   /// Fixed header size preceding the payload.
   static const int headerLength = 1 + Limits.sessionIdBytes + 8;
 }

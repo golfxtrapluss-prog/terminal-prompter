@@ -63,6 +63,8 @@ final class AuthConfig {
     required this.sessionTtl,
     required this.maxFailedLogins,
     required this.lockout,
+    required this.idleTimeout,
+    required this.stateFile,
   });
 
   /// argon2id PHC string; empty until `tp-agent init` has run.
@@ -71,6 +73,12 @@ final class AuthConfig {
   final Duration sessionTtl;
   final int maxFailedLogins;
   final Duration lockout;
+
+  /// A login with no activity for this long expires (docs/05).
+  final Duration idleTimeout;
+
+  /// JSON file with passkeys, backup codes and TOTP replay state.
+  final String stateFile;
 
   /// True once a password is set.
   bool get isConfigured => passwordHash.isNotEmpty;
@@ -197,13 +205,24 @@ final class AgentConfig {
     } on FileSystemException catch (e) {
       throw ConfigParseError('cannot read $path: ${e.osError?.message ?? e}');
     }
-    return parse(text, environment: environment ?? Platform.environment);
+    return parse(
+      text,
+      environment: environment ?? Platform.environment,
+      baseDir: File(path).absolute.parent.path,
+    );
+  }
+
+  /// Makes a relative [path] relative to the config file's directory.
+  static String _resolve(String? baseDir, String path) {
+    if (baseDir == null || path.isEmpty || path.startsWith('/')) return path;
+    return '$baseDir/$path';
   }
 
   /// Parses TOML [text] and applies [environment] overrides.
   static AgentConfig parse(
     String text, {
     Map<String, String> environment = const {},
+    String? baseDir,
   }) {
     final Map<String, Object?> root;
     try {
@@ -225,8 +244,8 @@ final class AgentConfig {
     final tls = tlsSection.isEmpty
         ? null
         : TlsConfig(
-            certFile: tlsSection.string('cert_file', ''),
-            keyFile: tlsSection.string('key_file', ''),
+            certFile: _resolve(baseDir, tlsSection.string('cert_file', '')),
+            keyFile: _resolve(baseDir, tlsSection.string('key_file', '')),
           );
     if (mode == AgentMode.standalone &&
         (tls == null || tls.certFile.isEmpty || tls.keyFile.isEmpty)) {
@@ -256,6 +275,11 @@ final class AgentConfig {
         sessionTtl: auth.duration('session_ttl', const Duration(hours: 12)),
         maxFailedLogins: auth.int_('max_failed_logins', 5, min: 1),
         lockout: auth.duration('lockout', const Duration(minutes: 15)),
+        idleTimeout: auth.duration('idle_timeout', const Duration(hours: 4)),
+        stateFile: _resolve(
+          baseDir,
+          auth.string('state_file', '/var/lib/tp-agent/auth.json'),
+        ),
       ),
       shell: ShellConfig(
         command: shell.string('command', '/bin/bash'),
@@ -301,7 +325,10 @@ final class AgentConfig {
       audit: AuditConfig(
         enabled: audit.bool_('enabled', true),
         logInput: audit.bool_('log_input', true),
-        path: audit.string('path', '/var/lib/tp-agent/audit.jsonl'),
+        path: _resolve(
+          baseDir,
+          audit.string('path', '/var/lib/tp-agent/audit.jsonl'),
+        ),
       ),
     );
     config._validate();

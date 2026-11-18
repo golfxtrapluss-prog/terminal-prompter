@@ -264,7 +264,11 @@ final class InputFrame extends BinaryMessage {
     required this.session,
     required this.clientMsgId,
     required this.data,
+    this.fromPrompter = false,
   });
+
+  /// True for frame type `0x04` (a command line from the Prompter field).
+  final bool fromPrompter;
 
   /// Session id.
   final SessionId session;
@@ -280,12 +284,18 @@ final class InputFrame extends BinaryMessage {
 Uint8List encodeOutputFrame(SessionId session, int seq, List<int> data) =>
     _encodeFrame(BinaryFrame.typeOutput, session, seq, data);
 
-/// Encodes an input frame.
+/// Encodes an input frame; [fromPrompter] selects frame type `0x04`.
 Uint8List encodeInputFrame(
   SessionId session,
   int clientMsgId,
-  List<int> data,
-) => _encodeFrame(BinaryFrame.typeInput, session, clientMsgId, data);
+  List<int> data, {
+  bool fromPrompter = false,
+}) => _encodeFrame(
+  fromPrompter ? BinaryFrame.typePrompterInput : BinaryFrame.typeInput,
+  session,
+  clientMsgId,
+  data,
+);
 
 /// Decodes a binary frame of either direction.
 BinaryMessage decodeBinaryFrame(Uint8List bytes) {
@@ -300,11 +310,16 @@ BinaryMessage decodeBinaryFrame(Uint8List bytes) {
   switch (bytes[0]) {
     case BinaryFrame.typeOutput:
       return OutputFrame(session: session, seq: number, data: data);
-    case BinaryFrame.typeInput:
+    case BinaryFrame.typeInput || BinaryFrame.typePrompterInput:
       if (data.length > Limits.maxInputFrameBytes) {
         throw const ProtocolException('input frame too large');
       }
-      return InputFrame(session: session, clientMsgId: number, data: data);
+      return InputFrame(
+        session: session,
+        clientMsgId: number,
+        data: data,
+        fromPrompter: bytes[0] == BinaryFrame.typePrompterInput,
+      );
     case BinaryFrame.typeExecOut:
       throw const ProtocolException('exec_out frames are reserved for v2');
     default:

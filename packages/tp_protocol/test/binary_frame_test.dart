@@ -35,6 +35,24 @@ void main() {
     expect(utf8.decode(input.data), 'ls\r');
   });
 
+  test('prompter input uses type 0x04 and keeps the flag', () {
+    final frame = encodeInputFrame(
+      sid,
+      9,
+      utf8.encode('ls\r'),
+      fromPrompter: true,
+    );
+    expect(frame[0], BinaryFrame.typePrompterInput);
+    final decoded = decodeBinaryFrame(frame) as InputFrame;
+    expect(decoded.fromPrompter, isTrue);
+    expect(decoded.clientMsgId, 9);
+    expect(
+      (decodeBinaryFrame(encodeInputFrame(sid, 1, const [1])) as InputFrame)
+          .fromPrompter,
+      isFalse,
+    );
+  });
+
   test('empty payload is allowed', () {
     final f =
         decodeBinaryFrame(encodeOutputFrame(sid, 0, const [])) as OutputFrame;

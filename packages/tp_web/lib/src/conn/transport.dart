@@ -33,6 +33,9 @@ abstract interface class ClientTransport {
   /// True while open.
   bool get isOpen;
 
+  /// Close code once closed (4401 = login ended), else null.
+  int? get closeCode;
+
   /// Sends a JSON control message.
   void sendText(String text);
 

@@ -15,3 +15,7 @@ packages/tp_agent/lib/src/generated/assets.g.dart
 
 # Editor/session
 .claude/
+
+# Dev runtime state
+dev/auth.json
+dev/audit.jsonl*

@@ -119,6 +119,7 @@ void main() {
       config: config,
       sessions: sessions,
       staticFiles: DirectoryStaticFiles(webDir.path),
+      auth: null,
       agentVersion: 'test',
       port: 0,
     );

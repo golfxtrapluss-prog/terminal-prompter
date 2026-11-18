@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show ProcessSignal;
 import 'dart:typed_data';
 
@@ -156,7 +157,31 @@ final class Session {
     if (!_outputDone.isCompleted) _outputDone.complete();
   }
 
+  /// Tail of recent output, used only to recognise a password prompt.
+  String _tail = '';
+
+  static final RegExp _passwordPrompt = RegExp(
+    r'(password|passord|passphrase|passordfrase|pin)[^\n:]{0,40}:\s*$',
+    caseSensitive: false,
+  );
+  static final RegExp _ansi = RegExp(
+    r'\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)|[@-Z\\-_])',
+  );
+
+  /// True when the last output line looks like a password prompt
+  /// (`[sudo] password for tp:`, `Password:`), so the next Prompter line
+  /// is masked in the audit log.
+  bool get awaitingPassword {
+    final clean = _tail.replaceAll(_ansi, '');
+    final lastLine = clean.split(RegExp(r'[\r\n]')).last;
+    return _passwordPrompt.hasMatch(lastLine);
+  }
+
   void _onChunk(Uint8List chunk) {
+    final text = latin1.decode(chunk);
+    _tail = (_tail + text).length > 256
+        ? (_tail + text).substring((_tail + text).length - 256)
+        : _tail + text;
     final pending = _pending ??= BytesBuilder(copy: false);
     if (pending.isEmpty) _pendingStart = buffer.seq;
     buffer.write(chunk);

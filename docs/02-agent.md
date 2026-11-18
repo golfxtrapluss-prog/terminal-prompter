@@ -48,8 +48,10 @@ key_file  = "/etc/tp-agent/privkey.pem"
 password_hash = "$argon2id$v=19$m=65536,t=3,p=2$..."
 totp_secret = ""
 session_ttl = "12h"
+idle_timeout = "4h"             # innlogging uten aktivitet så lenge utløper
 max_failed_logins = 5
 lockout = "15m"
+state_file = "/var/lib/tp-agent/auth.json"   # passkeys, reservekode-hasher, TOTP-gjenbruksvern (0600)
 
 [shell]
 command = "/bin/bash"
@@ -159,9 +161,18 @@ final class Session {
 |---|---|---|---|
 | GET | `/`, `/assets/*` | nei | Klient (innebygd, gzip, ETag) |
 | GET | `/bootstrap` | nei | Keymap-kompensator (kan deaktiveres) |
-| POST | `/api/login` | nei (rate limit) | |
-| POST | `/api/logout` | ja | |
-| GET | `/api/me` | ja | Status, versjon, sesjoner |
+| POST | `/api/login` | nei (rate limit) | `{password, totp?}` eller `{backup_code}` → cookies `tp_session` (HttpOnly) og `tp_csrf` |
+| GET | `/api/auth/methods` | nei | `{totp, passkeys}` så innloggingssiden vet hvilke felt som trengs |
+| POST | `/api/auth/passkey/login/options` | nei | WebAuthn-utfordring for innlogging |
+| POST | `/api/auth/passkey/login` | nei (rate limit) | Verifiserer passkey-signatur → cookies |
+| POST | `/api/logout` | ja | Avslutter denne innloggingen og lukker dens WebSockets (kode 4401) |
+| POST | `/api/logout-all` | ja | Avslutter alle innlogginger |
+| POST | `/api/auth/logins/revoke` | ja | `{id}`: logg ut én annen enhet |
+| POST | `/api/auth/passkey/register/options` | ja | WebAuthn-utfordring for registrering |
+| POST | `/api/auth/passkey/register` | ja | Lagrer ny passkey |
+| POST | `/api/auth/passkey/remove` | ja | `{id}` |
+| POST | `/api/auth/backup-codes` | ja | Lager 10 nye reservekoder (vises én gang), gamle slutter å virke |
+| GET | `/api/me` | ja | Versjon, innlogginger, passkeys, reservekoder igjen, TOTP på/av |
 | GET | `/api/ws` | ja | WebSocket (`WebSocketTransformer.upgrade`, `CompressionOptions`) |
 | GET | `/api/sse` | ja | Fallback-utstrøm |
 | POST | `/api/sse/send` | ja | Fallback-inn |

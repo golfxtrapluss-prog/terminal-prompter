@@ -4,13 +4,15 @@
 mode = "proxy"
 listen = "127.0.0.1:7681"
 base_path = "/"
-public_origin = "http://127.0.0.1:7681"
+public_origin = ""  # empty: Origin must match the Host header (localhost or 127.0.0.1)
 
 [auth]
-# Set by `tp-agent init` (milestone M5). Dev password will be "dev".
-password_hash = ""
+# Development password: "dev" (docs/10). Loopback only; never reuse this file.
+password_hash = '$argon2id$v=19$m=65536,t=3,p=2$b8t1wOEBeUdXOe43/6qRgA$68WKej/nfqjefmUN6w6cK1nZxU2HA5vZ2hPmHEVsEdo'
 totp_secret = ""
 session_ttl = "12h"
+idle_timeout = "4h"
+state_file = "auth.json"
 max_failed_logins = 5
 lockout = "15m"
 
@@ -45,4 +47,4 @@ max_concurrent_runs = 4
 [audit]
 enabled = true
 log_input = true
-path = "./dev/audit.jsonl"
+path = "audit.jsonl"

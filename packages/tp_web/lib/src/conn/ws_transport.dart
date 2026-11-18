@@ -41,7 +41,7 @@ final class WsClientTransport implements ClientTransport {
   final Completer<void> _opened = Completer<void>();
   final StreamController<ServerFrame> _frames = StreamController<ServerFrame>();
 
-  /// WebSocket close code once closed.
+  @override
   int? closeCode;
 
   @override
