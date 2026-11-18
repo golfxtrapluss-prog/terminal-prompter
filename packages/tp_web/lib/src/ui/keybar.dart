@@ -94,9 +94,35 @@ final class KeyBar {
       _dotElements.add(dot);
     }
     if (_row >= rows.length) _row = 0;
+    // Jump (no animation) back to the row that was showing.
+    _rowsHost.scrollLeft = _rowsHost.clientWidth * _row;
     _updateDots();
     _refreshModifiers();
   }
+
+  /// Shows or hides the extra newline button; rebuilds only on change.
+  void setShowNewline(bool value) {
+    if (value == showNewline) return;
+    showNewline = value;
+    rebuild();
+  }
+
+  /// Replaces the rows and rebuilds.
+  void setRows(List<List<KeyBarItem>> value) {
+    rows = value;
+    rebuild();
+  }
+
+  /// One-shot or locked modifier to apply to a key typed on the device's own
+  /// keyboard (docs/16). Returns [Modifier.none] when nothing is armed.
+  Modifier consumeForExternalKey() {
+    final m = modifiers.consume();
+    _refreshModifiers();
+    return m;
+  }
+
+  /// True while Ctrl or Alt is armed or locked.
+  bool get modifierArmed => modifiers.modifier != Modifier.none;
 
   /// Scrolls to [index].
   void showRow(int index) {
@@ -146,6 +172,7 @@ final class KeyBar {
           className: 'key',
           text: char,
           title: longPress == null ? null : 'hold: $longPress',
+          label: char,
         );
         _press(
           b,
@@ -199,6 +226,7 @@ final class KeyBar {
           className: 'key key-custom',
           text: item.label,
           title: item.send,
+          label: item.label,
         );
         _press(b, onTap: () => listener.onCustom(item));
         return b;

@@ -56,6 +56,8 @@ final class Strings {
     'status.connected': 'connected',
     'status.retry': 'retrying in',
     'newline': '↵+',
+    'on': 'On',
+    'off': 'Off',
   });
 
   static const Strings no = Strings._({
@@ -112,6 +114,8 @@ final class Strings {
     'status.connected': 'tilkoblet',
     'status.retry': 'prøver igjen om',
     'newline': '↵+',
+    'on': 'På',
+    'off': 'Av',
   });
 
   final Map<String, String> _map;

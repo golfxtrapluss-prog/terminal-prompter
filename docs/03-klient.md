@@ -48,6 +48,13 @@ Bytte: `Ctrl+Shift+Space` eller knapp. Klienten foreslår Raw automatisk ved alt
 - **Kø ved brudd:** kommandoer merkes «venter på nett», sendes ved gjenopprettet forbindelse; kø eldre enn 60 s krever ny bekreftelse.
 - **Leveringsstatus:** ⏳ til `ack_in` mottas, ✓ etterpå.
 
+## Presiseringer fra implementasjonen (M4)
+
+- **Replay svarer ikke på spørringer:** output som spilles av fra ringbufferen etter `attach` (alt før `attached.seq`) skrives til xterm uten at terminalens automatiske svar (DA, farge- og modusspørringer fra vim/htop) sendes til skallet. Ellers havner svarene i skallet som tastetrykk etter hver gjenoppkobling.
+- **Køen overlever sideinnlasting:** kommandoer som ikke er sendt ennå lagres lokalt (`tp.queue`) og hentes inn ved oppstart. Regelen om ny bekreftelse etter 60 s gjelder fortsatt. Sendte, ubekreftede kommandoer dekkes av tilkoblingens egen gjensending.
+- **PWA-oppdatering:** service workerens hurtigbuffer har en nøkkel laget av hash over klientfilene. Når en ny service worker tar over en side som allerede var styrt av en eldre, lastes siden på nytt én gang, så den kjører den nye klientkoden.
+- **Ctrl/Alt fra tastelinjen** gjelder også neste tegn fra telefonens tastatur, både i Prompter-feltet (`beforeinput`) og i Rå-modus.
+
 ## Tilkoblingsmotor (`lib/src/conn/connection.dart`)
 
 ```

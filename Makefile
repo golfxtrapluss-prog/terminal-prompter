@@ -32,8 +32,11 @@ web:
 > cd $(WEB) && $(DART) compile js -O2 --no-source-maps -DTP_VERSION=$(VERSION) -o build/main.dart.js web/main.dart
 > rm -rf $(WEB_BUILD) && mkdir -p $(WEB_BUILD)
 > cp $(WEB)/web/index.html $(WEB)/web/styles.css $(WEB)/web/manifest.webmanifest $(WEB)/build/main.dart.js $(WEB_BUILD)/
-> sed 's/__TP_VERSION__/$(VERSION)/' $(WEB)/web/sw.js > $(WEB_BUILD)/sw.js
 > cp -r $(WEB)/web/vendor $(WEB)/web/icons $(WEB_BUILD)/
+> # Cache key = hash of the client files, so every rebuild invalidates the
+> # service worker cache even when the git version is unchanged.
+> hash=$$(cd $(WEB_BUILD) && find . -type f ! -name sw.js | sort | xargs cat | sha256sum | cut -c1-12); \
+>   sed "s/__TP_VERSION__/$(VERSION)-$$hash/" $(WEB)/web/sw.js > $(WEB_BUILD)/sw.js
 
 embed: web gen-assets
 

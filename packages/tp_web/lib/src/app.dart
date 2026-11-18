@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:typed_data';
 
 import 'package:tp_protocol/tp_protocol.dart';
 import 'package:web/web.dart' as web;
@@ -75,7 +76,7 @@ final class App implements KeyBarListener {
       bracketedPaste: () => _terminal.bracketedPaste,
       onModeToggle: toggleMode,
       onScrollTerminal: _terminal.scrollPages,
-    );
+    )..onModifiedChar = _onPrompterModifiedChar;
     _keyBar = KeyBar(
       this,
       rows: _keyBarRows(),
@@ -111,6 +112,7 @@ final class App implements KeyBarListener {
       'button',
       text: '⌨ ${_strings['keybar']}',
       title: 'Ctrl+Shift+K',
+      label: _strings['keybar'],
     );
     keybarButton.addEventListener(
       'pointerdown',
@@ -139,7 +141,7 @@ final class App implements KeyBarListener {
     _applyKeyBarScale();
 
     _terminal
-      ..onInput = _connection.sendInput
+      ..onInput = _onTerminalInput
       ..onResize = _connection.sendResize
       ..onAlternateScreen = _onAlternateScreen
       ..onFontSizeChanged = (size) {
@@ -198,8 +200,7 @@ final class App implements KeyBarListener {
     _modeButton.textContent = prompter
         ? '● ${_strings['mode.prompter']}'
         : '● ${_strings['mode.raw']}';
-    _keyBar.showNewline = prompter && _prompter.enterSends;
-    _keyBar.rebuild();
+    _keyBar.setShowNewline(prompter && _prompter.enterSends);
     _hint.textContent = !prompter
         ? _strings['hint.raw']
         : _touch
@@ -249,6 +250,31 @@ final class App implements KeyBarListener {
 
   void _applyKeyBarScale() {
     _root.style.setProperty('--key-scale', '${_settings.keyBarScale / 100}');
+  }
+
+  /// Raw-mode keyboard input from xterm. A Ctrl/Alt armed on the key bar
+  /// applies to the next single character typed on the device keyboard.
+  void _onTerminalInput(Uint8List data) {
+    if (_keyBar.modifierArmed &&
+        data.length == 1 &&
+        data[0] >= 0x20 &&
+        data[0] < 0x7f) {
+      final modifier = _keyBar.consumeForExternalKey();
+      _sendRaw(KeyEncoder.encodeChar(String.fromCharCode(data[0]), modifier));
+      return;
+    }
+    _connection.sendInput(data);
+  }
+
+  /// Prompter-mode character from the device keyboard while a modifier is
+  /// armed. Returns true when it was consumed.
+  bool _onPrompterModifiedChar(String char) {
+    if (!_keyBar.modifierArmed) return false;
+    final modifier = _keyBar.consumeForExternalKey();
+    if (modifier == Modifier.ctrl) {
+      _prompter.handleCtrl(char);
+    }
+    return true;
   }
 
   void _sendRaw(String sequence) =>
@@ -355,7 +381,7 @@ final class App implements KeyBarListener {
     }
     _terminal.fontSize = _settings.fontSize;
     _prompter.reloadSettings();
-    _keyBar.rows = _keyBarRows();
+    _keyBar.setRows(_keyBarRows());
     _applyKeyBarScale();
     _applyKeyBarVisibility(_settings.keyBarVisibleFor(touch: _touch));
     _setMode(_mode);

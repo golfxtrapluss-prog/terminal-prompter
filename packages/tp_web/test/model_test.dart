@@ -162,4 +162,29 @@ void main() {
       expect(t.bracketedPaste, isFalse);
     });
   });
+
+  test('queued commands survive a reload; sent ones are not persisted', () {
+    final store = MemoryStore();
+    var now = DateTime.utc(2026, 11, 18, 12);
+    final q = CommandQueue(store: store, clock: () => now);
+    q.enqueue('echo a', Uint8List.fromList([1]));
+    final b = q.enqueue('echo b', Uint8List.fromList([2]));
+    q.markSent(b, 3);
+
+    final restored = CommandQueue(store: store, clock: () => now);
+    expect(restored.items.map((c) => c.text), ['echo a']);
+    expect(restored.items.single.bytes, [1]);
+    expect(restored.takeSendable(), hasLength(1));
+
+    now = now.add(const Duration(minutes: 5));
+    final late = CommandQueue(store: store, clock: () => now);
+    expect(late.takeSendable(), isEmpty);
+    expect(
+      late.items.single.status,
+      DeliveryStatus.stale,
+      reason: 'old commands need confirmation',
+    );
+    late.discard(late.items.single);
+    expect(store.read('tp.queue'), isNull);
+  });
 }

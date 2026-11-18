@@ -79,7 +79,7 @@ extension type Terminal._(JSObject _) implements JSObject {
   external factory Terminal(TerminalOptions options);
 
   external void open(web.HTMLElement parent);
-  external void write(JSAny data);
+  external void write(JSAny data, [JSFunction? callback]);
   external void loadAddon(JSObject addon);
   external void focus();
   external void resize(int cols, int rows);

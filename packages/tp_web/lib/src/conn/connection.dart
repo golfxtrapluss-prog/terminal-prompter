@@ -59,8 +59,11 @@ abstract interface class TerminalSink {
   /// Current size in cells.
   (int cols, int rows) get size;
 
-  /// Writes output bytes.
-  void writeOutput(Uint8List data);
+  /// Writes output bytes. [replay] is true for scrollback re-sent after an
+  /// attach: the terminal must not answer queries contained in it (DA,
+  /// colour or mode queries from vim/htop), or the answers would reach the
+  /// shell as typed input.
+  void writeOutput(Uint8List data, {bool replay = false});
 
   /// Writes a status line (not from the PTY), e.g. "[session ended]".
   void writeNotice(String text);
@@ -124,6 +127,9 @@ final class Connection {
   SessionId? _session;
   String _sessionName = '';
   int? _lastSeq;
+
+  /// Output before this sequence number is replay from the ring buffer.
+  int _replayEnd = 0;
   int _nextMsgId = 1;
   int _unackedOutputBytes = 0;
   int _attempt = 0;
@@ -318,8 +324,9 @@ final class Connection {
     switch (message) {
       case ServerHello():
         _attach();
-      case Attached(:final session, :final name, :final truncated):
+      case Attached(:final session, :final name, :final truncated, :final seq):
         final resumed = session == _session && _lastSeq != null;
+        _replayEnd = seq;
         _session = session;
         _sessionName = name;
         _store.write(_sessionKey, session.toString());
@@ -375,7 +382,7 @@ final class Connection {
       if (skip >= data.length) return;
       data = Uint8List.sublistView(data, skip);
     }
-    terminal.writeOutput(data);
+    terminal.writeOutput(data, replay: message.seq < _replayEnd);
     _output.add(data);
     _lastSeq = message.seq + message.data.length;
     _unackedOutputBytes += data.length;

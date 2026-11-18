@@ -29,6 +29,7 @@ final class PrompterView {
     required this.onScrollTerminal,
   }) : history = CommandHistory(store),
        snippets = SnippetLibrary(store),
+       queue = CommandQueue(store: store),
        _danger = DangerDetector(settings.dangerPatterns) {
     element = el('div', className: 'prompter');
     _status = el('div', className: 'prompter-status');
@@ -65,6 +66,17 @@ final class PrompterView {
       ..appendChild(row);
     _field.addEventListener('keydown', _onKeyDown.toJS);
     _field.addEventListener('input', ((web.Event _) => _autoGrow()).toJS);
+    // Phone keyboards deliver characters as beforeinput, often without a
+    // usable keydown, so the armed key bar modifier is applied here.
+    _field.addEventListener(
+      'beforeinput',
+      ((web.InputEvent e) {
+        final data = e.data;
+        if (e.inputType == 'insertText' && data != null && data.length == 1) {
+          if (onModifiedChar?.call(data) ?? false) e.preventDefault();
+        }
+      }).toJS,
+    );
     connection.acks.listen((id) {
       if (queue.ack(id)) _renderStatus();
     });
@@ -83,9 +95,13 @@ final class PrompterView {
   final bool Function() bracketedPaste;
   final void Function() onModeToggle;
   final void Function(int pages) onScrollTerminal;
+
+  /// Called for a single typed character before it reaches the field; return
+  /// true to swallow it (used for Ctrl/Alt armed on the key bar).
+  bool Function(String char)? onModifiedChar;
   final CommandHistory history;
   final SnippetLibrary snippets;
-  final CommandQueue queue = CommandQueue();
+  final CommandQueue queue;
   DangerDetector _danger;
 
   late final web.HTMLElement element;
@@ -238,6 +254,7 @@ final class PrompterView {
       _showConfirm(
         strings['danger.title'],
         detail: command,
+        danger: true,
         actions: {
           strings['danger.run']: () => _send(command),
           strings['cancel']: () {},
@@ -271,9 +288,7 @@ final class PrompterView {
     if (!connection.isLive) return;
     final id = connection.sendInput(cmd.bytes);
     if (id == null) return;
-    cmd
-      ..msgId = id
-      ..status = DeliveryStatus.sent;
+    queue.markSent(cmd, id);
   }
 
   void _flushQueue() {
@@ -346,6 +361,7 @@ final class PrompterView {
     String title, {
     required String detail,
     required Map<String, void Function()> actions,
+    bool danger = false,
   }) {
     _confirm.textContent = '';
     _confirm
@@ -356,7 +372,7 @@ final class PrompterView {
     for (final entry in actions.entries) {
       final b = el(
         'button',
-        className: first ? 'primary' : '',
+        className: first ? (danger ? 'danger' : 'primary') : '',
         text: entry.key,
       );
       first = false;
@@ -456,6 +472,7 @@ final class PrompterView {
         className: 'snippet-use',
         text: s.name,
         title: s.command,
+        label: s.name,
       );
       use.addEventListener(
         'pointerdown',
@@ -467,6 +484,7 @@ final class PrompterView {
         className: 'snippet-del',
         text: '×',
         title: strings['delete'],
+        label: '${strings['delete']} ${s.name}',
       );
       del.onclick = ((web.Event _) {
         snippets.remove(s.name);

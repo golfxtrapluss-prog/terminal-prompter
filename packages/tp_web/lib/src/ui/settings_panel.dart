@@ -56,8 +56,8 @@ final class SettingsPanel {
     }, settings.defaultMode?.name ?? '');
     final enter = _select(form, strings['settings.enterSends'], {
       '': strings['settings.auto'],
-      'true': 'On',
-      'false': 'Off',
+      'true': strings['on'],
+      'false': strings['off'],
     }, settings.enterSends?.toString() ?? '');
     final keybar = _select(form, strings['settings.keybar'], {
       'auto': strings['settings.keybar.auto'],

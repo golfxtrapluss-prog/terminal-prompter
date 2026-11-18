@@ -80,8 +80,13 @@ final class FakeTerminal implements TerminalSink {
   @override
   (int, int) get size => (80, 24);
 
+  final List<bool> replayFlags = [];
+
   @override
-  void writeOutput(Uint8List data) => text.write(utf8.decode(data));
+  void writeOutput(Uint8List data, {bool replay = false}) {
+    replayFlags.add(replay);
+    text.write(utf8.decode(data));
+  }
 
   @override
   void writeNotice(String t) => notices.add(t);
@@ -277,6 +282,20 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
       final attach = await handshake();
       expect(attach.session, isNull);
+    },
+  );
+
+  test(
+    'output before attached.seq is flagged as replay, later output is live',
+    () async {
+      conn = make()..start();
+      await handshake(seq: 6);
+      final t = transports.single;
+      t.output(sid, 0, 'replay');
+      t.output(sid, 6, 'live');
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      expect(terminal.text.toString(), 'replaylive');
+      expect(terminal.replayFlags, [true, false]);
     },
   );
 }

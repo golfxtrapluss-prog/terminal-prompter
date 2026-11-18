@@ -89,6 +89,8 @@ final class TerminalView implements TerminalSink {
   void bind() {
     _terminal.onData(
       ((String data) {
+        // Answers to queries replayed from scrollback are not user input.
+        if (_replaying > 0) return;
         onInput?.call(Connection.encodeInput(data));
       }).toJS,
     );
@@ -143,8 +145,19 @@ final class TerminalView implements TerminalSink {
   @override
   (int cols, int rows) get size => (_terminal.cols, _terminal.rows);
 
+  /// Replay writes still being parsed; terminal answers are dropped while
+  /// this is above zero.
+  int _replaying = 0;
+
   @override
-  void writeOutput(Uint8List data) => _terminal.write(data.toJS);
+  void writeOutput(Uint8List data, {bool replay = false}) {
+    if (!replay) {
+      _terminal.write(data.toJS);
+      return;
+    }
+    _replaying++;
+    _terminal.write(data.toJS, (() => _replaying--).toJS);
+  }
 
   @override
   void writeNotice(String text) =>

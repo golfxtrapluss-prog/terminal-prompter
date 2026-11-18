@@ -32,6 +32,7 @@ Hver milepæl er én avgrenset oppgave for Claude Code. Ikke start neste før ak
 - Prompter-felt, multilinje + bracketed paste, historikk, Ctrl+R, kø ved brudd, leveringsstatus, spesialtegnrad, auto-bytte ved alternate screen, farlige-kommando-bekreftelse.
 - **Tastelinje og mobil (doc 16):** alle fire rader, låsbare modifikatorer, langt trykk, gjentakelse, VisualViewport-tilpasning, Prompter som standard på mobil, knipezoom, PWA (manifest + service worker).
 - **Akseptanse:** på `geo`-profil oppleves skriving som lokal; kø-scenario fungerer; på ekte iPhone og Android kan man åpne vim, redigere, lagre med `Esc :wq` og avslutte htop med `F10` kun via tastelinjen, uten at telefonens tastatur lukkes.
+- **Status:** 🟡 implementert 18.11.2026 og verifisert i nettleser med mobilemulering (375×812 stående, 812×375 liggende) og PC-visning: Prompter, historikk, Ctrl+R, snutter, egne knapper, farlige kommandoer, kø ved brudd (også over sideoppfriskning uten nett), leveringsstatus, auto-bytte til Rå ved alternate screen, `vim` med `Esc :wq` og `htop` med `F10` kun via tastelinjen, Ctrl fra tastelinjen + vanlig tast = `\x03`, PWA med offline-start og oppdatering. **Gjenstår:** manuell test på ekte iPhone og Android, og Playwright-tester med mobilemulering (doc 16).
 
 ## M5 – Sikkerhet og innlogging (2–3 dager)
 - `tp-agent init/passwd/totp`, argon2id, TOTP, **passkeys (WebAuthn)**, cookie + CSRF, Origin-sjekk, rate limit, lockout, sikkerhetshoder, auditlogg, `base_path`.

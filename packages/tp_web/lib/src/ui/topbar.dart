@@ -29,6 +29,7 @@ final class TopBar {
       className: 'icon-btn',
       text: '⚙',
       title: strings['settings'],
+      label: strings['settings'],
     );
     settings.onclick = ((web.Event _) => onSettings()).toJS;
     element
