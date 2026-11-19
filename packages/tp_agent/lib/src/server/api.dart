@@ -486,11 +486,13 @@ final class Api {
 
   void _setCookies(HttpResponse response, NewLogin login) {
     final maxAge = config.auth.sessionTtl.inSeconds;
+    final secure = config.mode == AgentMode.standalone ||
+        (config.publicOrigin?.scheme == 'https');
     response.cookies
       ..add(
         Cookie(sessionCookie, login.token)
           ..httpOnly = true
-          ..secure = true
+          ..secure = secure
           ..sameSite = SameSite.strict
           ..path = config.basePath
           ..maxAge = maxAge,
@@ -498,7 +500,7 @@ final class Api {
       ..add(
         Cookie(csrfCookie, login.session.csrf)
           ..httpOnly = false
-          ..secure = true
+          ..secure = secure
           ..sameSite = SameSite.strict
           ..path = config.basePath
           ..maxAge = maxAge,
@@ -506,11 +508,13 @@ final class Api {
   }
 
   void _clearCookies(HttpResponse response) {
+    final secure = config.mode == AgentMode.standalone ||
+        (config.publicOrigin?.scheme == 'https');
     for (final name in [sessionCookie, csrfCookie]) {
       response.cookies.add(
         Cookie(name, '')
           ..httpOnly = name == sessionCookie
-          ..secure = true
+          ..secure = secure
           ..sameSite = SameSite.strict
           ..path = config.basePath
           ..maxAge = 0,
